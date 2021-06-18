@@ -1,0 +1,84 @@
+---
+title: "Proyecto HousePrices :P"
+output: html_notebook
+---
+
+```{r message=FALSE, warning=FALSE}
+library(dplyr)
+library(ggplot2)
+library(cleandata)
+library(corrplot)
+library(gridExtra)
+
+```
+
+```{r}
+all_data=read.csv("train.csv")
+all_data
+all_data$ocean_proximity<-as.factor(all_data$ocean_proximity)
+```
+
+Usamos summary para ver cuáles columnas tienen NAs y verificamos el valor mínimo de cada columna para asegurarnos que no hay NAs disfrazados de 0
+
+```{r fig.width=12}
+summary(all_data)
+```
+
+Solamente total_bedrooms tiene faltantes y son 144, veamos cuánto es eso en porcentaje.
+
+```{r}
+naCount<-sum(is.na(all_data$total_bedrooms))
+
+naCount / length(all_data$total_bedrooms) * 100
+```
+
+Prácticamente 1% de datos faltantes. Más adelante nos ocuparemos de ellos. Por ahora realizaremos algo de análisis exploratorio y codificación.
+
+```{r}
+all_data %>% 
+  group_by(ocean_proximity) %>%
+  summarize(mean_value = mean(median_house_value)) %>%
+  arrange(desc(mean_value))
+```
+
+Es bastante claro que al menos en cierta medida, la proximidad al océano afecta el precio. Esto nos da una pista de que podemos codificar esta variable como ordinal.
+
+```{r}
+op_order<-c("INLAND", "<1H OCEAN", "NEAR OCEAN","NEAR BAY", "ISLAND")
+all_data$enc_ocean_proximity<-encode_ordinal(all_data[,11, drop=FALSE], order=op_order, out.int=T)
+```
+
+```{r}
+nasRemoved<-all_data %>% 
+  select(-c(ocean_proximity, id)) %>%
+  filter(!is.na(total_bedrooms))
+         
+corrplot(cor(nasRemoved), 
+         method = "ellipse", 
+         type="full",
+        addCoef.col = rgb(0,0,0, alpha = 0.6), diag = TRUE, number.cex=0.8, 
+        col= colorRampPalette(c("red","white", "green"))(100))
+```
+
+Vemos que nuestra variable con NAs (total_bedrooms) tiene correlación casi perfecta con households, por lo que usaremos el valor de esta para obtener datos de imputación. Posiblemente será útil más adelante tener features obtenidas aplicando binning a ciertas variables.
+
+```{r fig.height=7, fig.width=4.5}
+plot_outliers<-function(df, colname) {
+  column<-sym(colname)
+
+  hist<-ggplot(df, aes(x=unlist(!!column)))+
+    geom_histogram(color="white", fill="blue")+
+    theme_minimal()
+  
+  box<-ggplot(df, aes(x=unlist(!!column)))+
+    geom_boxplot()+
+    theme_minimal()
+
+    grid.arrange(hist, box, nrow=2)
+}
+
+for (col in names(nasRemoved)) {
+  plot_outliers(nasRemoved, col)
+}
+
+```
