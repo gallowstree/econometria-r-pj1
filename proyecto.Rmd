@@ -14,8 +14,9 @@ library(gridExtra)
 
 ```{r}
 all_data=read.csv("train.csv")
-all_data
 all_data$ocean_proximity<-as.factor(all_data$ocean_proximity)
+all_data$median_house_value<-all_data$median_house_value / 10000
+all_data
 ```
 
 Usamos summary para ver cuáles columnas tienen NAs y verificamos el valor mínimo de cada columna para asegurarnos que no hay NAs disfrazados de 0
@@ -56,13 +57,29 @@ nasRemoved<-all_data %>%
 corrplot(cor(nasRemoved), 
          method = "ellipse", 
          type="full",
-        addCoef.col = rgb(0,0,0, alpha = 0.6), diag = TRUE, number.cex=0.8, 
+        addCoef.col = rgb(0,0,0, alpha = 0.6), diag = TRUE, number.cex=0.77, 
         col= colorRampPalette(c("red","white", "green"))(100))
 ```
 
-Vemos que nuestra variable con NAs (total_bedrooms) tiene correlación casi perfecta con households, por lo que usaremos el valor de esta para obtener datos de imputación. Posiblemente será útil más adelante tener features obtenidas aplicando binning a ciertas variables.
+Vemos que nuestra variable con NAs (total_bedrooms) tiene correlación casi perfecta con households, por lo que usaremos el valor de esta para obtener datos de imputación. 
+```{r}
+print(summary(all_data$total_bedrooms))
 
-```{r fig.height=7, fig.width=4.5}
+total_bedroom_imputer<-lm(nasRemoved$total_bedrooms ~ nasRemoved$households)
+print(summary(total_bedroom_imputer))
+
+all_data$total_bedrooms<-ifelse(is.na(all_data$total_bedrooms), 
+                                predict(total_bedroom_imputer, data.frame(all_data$households)), 
+                                all_data$total_bedrooms)
+
+print(summary(all_data$total_bedrooms))
+```
+
+
+
+Posiblemente será útil más adelante tener features obtenidas aplicando binning a ciertas variables.
+
+```{r fig.height=4, fig.width=12.5}
 plot_outliers<-function(df, colname) {
   column<-sym(colname)
 
@@ -73,8 +90,14 @@ plot_outliers<-function(df, colname) {
   box<-ggplot(df, aes(x=unlist(!!column)))+
     geom_boxplot()+
     theme_minimal()
+  
+  
+  qq<-ggplot(df, aes(sample=!!column))+
+    stat_qq()+
+    stat_qq_line(col="red", lwd=1)
+    theme_minimal()
 
-    grid.arrange(hist, box, nrow=2)
+  grid.arrange(hist, box, qq, ncol=3)
 }
 
 for (col in names(nasRemoved)) {
@@ -82,3 +105,19 @@ for (col in names(nasRemoved)) {
 }
 
 ```
+TODOS: dividir en bins
+- housing age -> 5 o 10 años
+- lat y long
+- qué pasa con total rooms? comparemos con rooms/household y otros ratios. Igual con bedrooms
+- pop tmaibén tiene muchos outliers... pop/households
+
+Feature ideas:
+- median income per capita
+- 
+
+```{r}
+
+all_data$age_binned<-as.factor(cut(all_data$housing_median_age, breaks = c(0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55), labels = F))
+summary(all_data$age_binned)
+```
+
