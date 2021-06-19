@@ -12,28 +12,15 @@ library(gridExtra)
 
 ```
 
+# Limpieza y análisis inicial
 ```{r}
+median_house_value_scale = 10000
 all_data=read.csv("train.csv")
 all_data$ocean_proximity<-as.factor(all_data$ocean_proximity)
-all_data$median_house_value<-all_data$median_house_value / 10000
+all_data$median_house_value<-all_data$median_house_value / median_house_value_scale
 all_data
 ```
 
-Usamos summary para ver cuáles columnas tienen NAs y verificamos el valor mínimo de cada columna para asegurarnos que no hay NAs disfrazados de 0
-
-```{r fig.width=12}
-summary(all_data)
-```
-
-Solamente total_bedrooms tiene faltantes y son 144, veamos cuánto es eso en porcentaje.
-
-```{r}
-naCount<-sum(is.na(all_data$total_bedrooms))
-
-naCount / length(all_data$total_bedrooms) * 100
-```
-
-Prácticamente 1% de datos faltantes. Más adelante nos ocuparemos de ellos. Por ahora realizaremos algo de análisis exploratorio y codificación.
 
 ```{r}
 all_data %>% 
@@ -49,8 +36,38 @@ op_order<-c("INLAND", "<1H OCEAN", "NEAR OCEAN","NEAR BAY", "ISLAND")
 all_data$enc_ocean_proximity<-encode_ordinal(all_data[,11, drop=FALSE], order=op_order, out.int=T)
 ```
 
+
+Usamos summary para ver cuáles columnas tienen NAs y verificamos el valor mínimo de cada columna para asegurarnos que no hay NAs disfrazados de 0
+
+```{r fig.width=12}
+summary(all_data)
+```
+
+Solamente total_bedrooms tiene faltantes y son 144, veamos cuánto es eso en porcentaje.
+
 ```{r}
-nasRemoved<-all_data %>% 
+naCount<-sum(is.na(all_data$total_bedrooms))
+
+naCount / length(all_data$total_bedrooms) * 100
+```
+
+Prácticamente 1% de datos faltantes. Nos ocuparemos de ellos, pero antes debemos divir los datos en train/test
+```{r}
+set.seed(279720)
+spec = c(train = .7, test = .15, validate = .15)
+
+g = sample(cut(
+  seq(nrow(all_data)), 
+  nrow(all_data)*cumsum(c(0,spec)),
+  labels = names(spec)
+))
+
+data = split(all_data, g)
+```
+
+
+```{r}
+nasRemoved<-data$train %>% 
   select(-c(ocean_proximity, id)) %>%
   filter(!is.na(total_bedrooms))
          
@@ -63,16 +80,29 @@ corrplot(cor(nasRemoved),
 
 Vemos que nuestra variable con NAs (total_bedrooms) tiene correlación casi perfecta con households, por lo que usaremos el valor de esta para obtener datos de imputación. 
 ```{r}
-print(summary(all_data$total_bedrooms))
+print(summary(data$train$total_bedrooms))
 
 total_bedroom_imputer<-lm(nasRemoved$total_bedrooms ~ nasRemoved$households)
 print(summary(total_bedroom_imputer))
 
-all_data$total_bedrooms<-ifelse(is.na(all_data$total_bedrooms), 
-                                predict(total_bedroom_imputer, data.frame(all_data$households)), 
-                                all_data$total_bedrooms)
+imputeTotalBedrooms<-function(df) {
+  df$total_bedrooms<-ifelse(is.na(df$total_bedrooms), 
+                                predict(total_bedroom_imputer, data.frame(df$households)), 
+                                df$total_bedrooms)
+}
 
-print(summary(all_data$total_bedrooms))
+#data$train$total_bedrooms<-ifelse(is.na(data$train$total_bedrooms), 
+#                                predict(total_bedroom_imputer, data.frame(data$train$households)), 
+#                                data$train$total_bedrooms)
+
+imputeTotalBedrooms(data$train)
+imputeTotalBedrooms(data$test)
+imputeTotalBedrooms(data$validate)
+
+print(summary(data$train$total_bedrooms))
+print(summary(data$test$total_bedrooms))
+print(summary(data$validate$total_bedrooms))
+
 ```
 
 
