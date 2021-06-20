@@ -10,18 +10,31 @@ summary(read.csv("test.csv"))
 
 # Prioridades
 1.DONE Generar predicciones rápidamente para tener un baseline con qué comparar el modelo
-1. Incluir age
+1.DONE Incluir age
 2. Tratar outliers
-2. Más Feature Engineering
+2. scaling
+2. k-folds
+   ditch 3 way split, use 80/20
+2.5 selection techniques
+2.5. Más Feature Engineering
 3. regularización
 3. residual plot
+4. check for heteroskedasticity
 
 when having spare tries: compare binning age with age
 
 # Ideas y cosas
 - probar un submission con todo el train set vs train/validation
 - Generalized linear model
+- regression techniques for lat/long data
 
+
+# Interesting bits of info
+- The Log Transform is one of the most popular Transformation techniques out there. It is primarily used to convert a skewed distribution to a normal distribution/less-skewed distribution.
+- knn imputation is a thing
+
+
+## outlier treatment
 
 #################### 
 

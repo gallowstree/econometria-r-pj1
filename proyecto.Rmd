@@ -10,6 +10,7 @@ library(cleandata)
 library(corrplot)
 library(gridExtra)
 library(Metrics)
+library(caret)
 ```
 
 # Pre-procesamiento, limpieza y análisis inicial
@@ -182,6 +183,8 @@ rmse(predict(fit5, xs), data$validate$median_house_value)*median_house_value_sca
 rmse(predict(fit6, xs), data$validate$median_house_value)*median_house_value_scale
 rmse(predict(fit7, xs), data$validate$median_house_value)*median_house_value_scale
 
+
+
 ```
 ```{r}
 #summary(fit1)
@@ -209,7 +212,7 @@ timestamp<-function() {
 
 writePredictions<-function(predictions, name, ids=testing_set$id) {
   data<-cbind(id=ids, median_house_value=predictions*median_house_value_scale)
-  filename<-paste("predictions/", timestamp(), "_", name, sep="")
+  filename<-paste("predictions/", timestamp(), "_", name, ".csv", sep="")
   write.csv(data, filename, row.names = FALSE, quote=FALSE)
 }
 
@@ -217,6 +220,6 @@ writePredictions<-function(predictions, name, ids=testing_set$id) {
 
 
 ```{r}
-xs_test<-extract_xs(testing_set)
-writePredictions(predict(fit7, xs_test), "fit7-withAge")
+#xs_test<-extract_xs(testing_set)
+#writePredictions(predict(fit7, xs_test), "fit7-withAge")
 ```
