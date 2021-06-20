@@ -12,28 +12,34 @@ library(gridExtra)
 
 ```
 
-# Limpieza y análisis inicial
+# Pre-procesamiento, limpieza y análisis inicial
 ```{r}
-median_house_value_scale = 10000
-all_data=read.csv("train.csv")
-all_data$ocean_proximity<-as.factor(all_data$ocean_proximity)
-all_data$median_house_value<-all_data$median_house_value / median_house_value_scale
+
+initialPreprocessing<-function(df) {
+  median_house_value_scale = 10000
+  df$ocean_proximity<-as.factor(df$ocean_proximity)
+  df$median_house_value<-df$median_house_value / median_house_value_scale
+  
+  op_order<-c("INLAND", "<1H OCEAN", "NEAR OCEAN","NEAR BAY", "ISLAND")
+  enc_ocean_proximity<-encode_ordinal(data.frame(df[["ocean_proximity"]]), order=op_order, out.int=T)
+  df<-cbind(df, enc_ocean_proximity)
+  return(df)
+}
+
+loadAndPreprocess<-function(csvName) {
+  return(initialPreprocessing(read.csv(csvName)))
+}
+
+all_data=loadAndPreprocess("train.csv")
 all_data
 ```
 
-
+Es bastante claro que al menos en cierta medida, la proximidad al océano afecta el precio. Esto nos da una pista de que podemos codificar esta variable como ordinal. Movimos esto a nuestra función de pre-procesamiento arriba para aprovecharlo en cualquier dataset.
 ```{r}
 all_data %>% 
   group_by(ocean_proximity) %>%
   summarize(mean_value = mean(median_house_value)) %>%
   arrange(desc(mean_value))
-```
-
-Es bastante claro que al menos en cierta medida, la proximidad al océano afecta el precio. Esto nos da una pista de que podemos codificar esta variable como ordinal.
-
-```{r}
-op_order<-c("INLAND", "<1H OCEAN", "NEAR OCEAN","NEAR BAY", "ISLAND")
-all_data$enc_ocean_proximity<-encode_ordinal(all_data[,11, drop=FALSE], order=op_order, out.int=T)
 ```
 
 
@@ -79,25 +85,25 @@ corrplot(cor(nasRemoved),
 ```
 
 Vemos que nuestra variable con NAs (total_bedrooms) tiene correlación casi perfecta con households, por lo que usaremos el valor de esta para obtener datos de imputación. 
+
 ```{r}
-print(summary(data$train$total_bedrooms))
 
-total_bedroom_imputer<-lm(nasRemoved$total_bedrooms ~ nasRemoved$households)
-print(summary(total_bedroom_imputer))
-
-imputeTotalBedrooms<-function(df) {
-  df$total_bedrooms<-ifelse(is.na(df$total_bedrooms), 
-                                predict(total_bedroom_imputer, data.frame(df$households)), 
-                                df$total_bedrooms)
+imp_total_bedrooms<-function(df, traindata=nasRemoved) {
+  x<-traindata$households
+  y<-traindata$total_bedrooms
+  lr<-lm(y ~ x)
+  new<-data.frame(x = df$households)
+  
+  df$total_bedrooms<-as.integer(ifelse(is.na(df$total_bedrooms), 
+                                predict(lr, new), 
+                                df$total_bedrooms))
+  
+  return(df)
 }
 
-#data$train$total_bedrooms<-ifelse(is.na(data$train$total_bedrooms), 
-#                                predict(total_bedroom_imputer, data.frame(data$train$households)), 
-#                                data$train$total_bedrooms)
-
-imputeTotalBedrooms(data$train)
-imputeTotalBedrooms(data$test)
-imputeTotalBedrooms(data$validate)
+data$train<-imp_total_bedrooms(data$train)
+data$test<-imp_total_bedrooms(data$test)
+data$validate<-imp_total_bedrooms(data$validate)
 
 print(summary(data$train$total_bedrooms))
 print(summary(data$test$total_bedrooms))
@@ -107,7 +113,6 @@ print(summary(data$validate$total_bedrooms))
 
 
 
-Posiblemente será útil más adelante tener features obtenidas aplicando binning a ciertas variables.
 
 ```{r fig.height=4, fig.width=12.5}
 plot_outliers<-function(df, colname) {
@@ -135,28 +140,3 @@ for (col in names(nasRemoved)) {
 }
 
 ```
-TODOS: dividir en bins
-- housing age -> 5 o 10 años
-- lat y long
-- qué pasa con total rooms? comparemos con rooms/household y otros ratios. Igual con bedrooms
-- pop tmaibén tiene muchos outliers... pop/households
-
-Feature ideas:
-- median income per capita
-- 
-
-```{r}
-
-all_data$age_binned_5<-cut(all_data$housing_median_age, breaks = c(0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55), labels = F)
-#summary(all_data$age_binned_5)
-
-all_data$age_binned_10<-cut(all_data$housing_median_age, breaks = c(0, 10, 20, 30, 40, 50, 60), labels = F)
-
-cols<-all_data %>% select(age_binned_5, age_binned_10, median_house_value)
-corrplot( cor(cols),
-  method = "ellipse", 
-         type="full",
-        addCoef.col = rgb(0,0,0, alpha = 0.6), diag = TRUE, number.cex=0.77, 
-        col= colorRampPalette(c("red","white", "green"))(100))
-```
-

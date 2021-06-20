@@ -240,15 +240,47 @@ pre code {
 <!-- rnb-output-end -->
 <!-- rnb-chunk-end -->
 <!-- rnb-text-begin -->
+<div id="prioridades" class="section level1">
+<h1>Prioridades</h1>
+<ol style="list-style-type: decimal">
+<li>Generar predicciones rápidamente para tener un baseline con qué comparar el modelo</li>
+<li>Tratar outliers</li>
+<li>Más Feature Engineering</li>
+</ol>
+</div>
 <div id="ideas-y-cosas" class="section level1">
 <h1>Ideas y cosas</h1>
 <ul>
 <li>probar un submission con todo el train set vs train/validation</li>
 </ul>
+<div id="section" class="section level20">
+<p class="heading"></p>
+<p>Posiblemente será útil más adelante tener features obtenidas aplicando binning a ciertas variables.</p>
+<p>TODOS: dividir en bins - housing age -&gt; 5 o 10 años - lat y long - qué pasa con total rooms? comparemos con rooms/household y otros ratios. Igual con bedrooms - pop tmaibén tiene muchos outliers… pop/households</p>
+<p>Feature ideas: - median income per capita -</p>
+<!-- rnb-text-end -->
+<!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuXG5hbGxfZGF0YSRhZ2VfYmlubmVkXzU8LWN1dChhbGxfZGF0YSRob3VzaW5nX21lZGlhbl9hZ2UsIGJyZWFrcyA9IGMoMCwgNSwgMTAsIDE1LCAyMCwgMjUsIDMwLCAzNSwgNDAsIDQ1LCA1MCwgNTUpLCBsYWJlbHMgPSBGKVxuI3N1bW1hcnkoYWxsX2RhdGEkYWdlX2Jpbm5lZF81KVxuXG5hbGxfZGF0YSRhZ2VfYmlubmVkXzEwPC1jdXQoYWxsX2RhdGEkaG91c2luZ19tZWRpYW5fYWdlLCBicmVha3MgPSBjKDAsIDEwLCAyMCwgMzAsIDQwLCA1MCwgNjApLCBsYWJlbHMgPSBGKVxuXG5jb2xzPC1hbGxfZGF0YSAlPiUgc2VsZWN0KGFnZV9iaW5uZWRfNSwgYWdlX2Jpbm5lZF8xMCwgbWVkaWFuX2hvdXNlX3ZhbHVlKVxuY29ycnBsb3QoIGNvcihjb2xzKSxcbiAgbWV0aG9kID0gXCJlbGxpcHNlXCIsIFxuICAgICAgICAgdHlwZT1cImZ1bGxcIixcbiAgICAgICAgYWRkQ29lZi5jb2wgPSByZ2IoMCwwLDAsIGFscGhhID0gMC42KSwgZGlhZyA9IFRSVUUsIG51bWJlci5jZXg9MC43NywgXG4gICAgICAgIGNvbD0gY29sb3JSYW1wUGFsZXR0ZShjKFwicmVkXCIsXCJ3aGl0ZVwiLCBcImdyZWVuXCIpKSgxMDApKVxuYGBgIn0= -->
+<pre class="r"><code>
+all_data$age_binned_5&lt;-cut(all_data$housing_median_age, breaks = c(0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55), labels = F)
+#summary(all_data$age_binned_5)
+
+all_data$age_binned_10&lt;-cut(all_data$housing_median_age, breaks = c(0, 10, 20, 30, 40, 50, 60), labels = F)
+
+cols&lt;-all_data %&gt;% select(age_binned_5, age_binned_10, median_house_value)
+corrplot( cor(cols),
+  method = &quot;ellipse&quot;, 
+         type=&quot;full&quot;,
+        addCoef.col = rgb(0,0,0, alpha = 0.6), diag = TRUE, number.cex=0.77, 
+        col= colorRampPalette(c(&quot;red&quot;,&quot;white&quot;, &quot;green&quot;))(100))</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-chunk-end -->
+<!-- rnb-text-begin -->
 <!-- rnb-text-end -->
 </div>
+</div>
 
-<div id="rmd-source-code">LS0tDQp0aXRsZTogIlIgTm90ZWJvb2siDQpvdXRwdXQ6IGh0bWxfbm90ZWJvb2sNCi0tLQ0KDQpgYGB7cn0NCnN1bW1hcnkocmVhZC5jc3YoInRlc3QuY3N2IikpDQpgYGANCg0KIyBJZGVhcyB5IGNvc2FzDQotIHByb2JhciB1biBzdWJtaXNzaW9uIGNvbiB0b2RvIGVsIHRyYWluIHNldCB2cyB0cmFpbi92YWxpZGF0aW9u</div>
+<div id="rmd-source-code">LS0tDQp0aXRsZTogIlIgTm90ZWJvb2siDQpvdXRwdXQ6IGh0bWxfbm90ZWJvb2sNCi0tLQ0KDQpgYGB7cn0NCnN1bW1hcnkocmVhZC5jc3YoInRlc3QuY3N2IikpDQoNCmBgYA0KDQojIFByaW9yaWRhZGVzDQoxLiBHZW5lcmFyIHByZWRpY2Npb25lcyByw6FwaWRhbWVudGUgcGFyYSB0ZW5lciB1biBiYXNlbGluZSBjb24gcXXDqSBjb21wYXJhciBlbCBtb2RlbG8NCjIuIFRyYXRhciBvdXRsaWVycw0KMi4gTcOhcyBGZWF0dXJlIEVuZ2luZWVyaW5nDQoNCiMgSWRlYXMgeSBjb3Nhcw0KLSBwcm9iYXIgdW4gc3VibWlzc2lvbiBjb24gdG9kbyBlbCB0cmFpbiBzZXQgdnMgdHJhaW4vdmFsaWRhdGlvbg0KDQoNCg0KIyMjIyMjIyMjIyMjIyMjIyMjIyMgDQoNClBvc2libGVtZW50ZSBzZXLDoSDDunRpbCBtw6FzIGFkZWxhbnRlIHRlbmVyIGZlYXR1cmVzIG9idGVuaWRhcyBhcGxpY2FuZG8gYmlubmluZyBhIGNpZXJ0YXMgdmFyaWFibGVzLg0KDQoNClRPRE9TOiBkaXZpZGlyIGVuIGJpbnMNCi0gaG91c2luZyBhZ2UgLT4gNSBvIDEwIGHDsW9zDQotIGxhdCB5IGxvbmcNCi0gcXXDqSBwYXNhIGNvbiB0b3RhbCByb29tcz8gY29tcGFyZW1vcyBjb24gcm9vbXMvaG91c2Vob2xkIHkgb3Ryb3MgcmF0aW9zLiBJZ3VhbCBjb24gYmVkcm9vbXMNCi0gcG9wIHRtYWliw6luIHRpZW5lIG11Y2hvcyBvdXRsaWVycy4uLiBwb3AvaG91c2Vob2xkcw0KDQpGZWF0dXJlIGlkZWFzOg0KLSBtZWRpYW4gaW5jb21lIHBlciBjYXBpdGENCi0gDQoNCmBgYHtyfQ0KDQphbGxfZGF0YSRhZ2VfYmlubmVkXzU8LWN1dChhbGxfZGF0YSRob3VzaW5nX21lZGlhbl9hZ2UsIGJyZWFrcyA9IGMoMCwgNSwgMTAsIDE1LCAyMCwgMjUsIDMwLCAzNSwgNDAsIDQ1LCA1MCwgNTUpLCBsYWJlbHMgPSBGKQ0KI3N1bW1hcnkoYWxsX2RhdGEkYWdlX2Jpbm5lZF81KQ0KDQphbGxfZGF0YSRhZ2VfYmlubmVkXzEwPC1jdXQoYWxsX2RhdGEkaG91c2luZ19tZWRpYW5fYWdlLCBicmVha3MgPSBjKDAsIDEwLCAyMCwgMzAsIDQwLCA1MCwgNjApLCBsYWJlbHMgPSBGKQ0KDQpjb2xzPC1hbGxfZGF0YSAlPiUgc2VsZWN0KGFnZV9iaW5uZWRfNSwgYWdlX2Jpbm5lZF8xMCwgbWVkaWFuX2hvdXNlX3ZhbHVlKQ0KY29ycnBsb3QoIGNvcihjb2xzKSwNCiAgbWV0aG9kID0gImVsbGlwc2UiLCANCiAgICAgICAgIHR5cGU9ImZ1bGwiLA0KICAgICAgICBhZGRDb2VmLmNvbCA9IHJnYigwLDAsMCwgYWxwaGEgPSAwLjYpLCBkaWFnID0gVFJVRSwgbnVtYmVyLmNleD0wLjc3LCANCiAgICAgICAgY29sPSBjb2xvclJhbXBQYWxldHRlKGMoInJlZCIsIndoaXRlIiwgImdyZWVuIikpKDEwMCkpDQpgYGANCg0K</div>
 
 
 

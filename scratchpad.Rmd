@@ -5,7 +5,46 @@ output: html_notebook
 
 ```{r}
 summary(read.csv("test.csv"))
+
 ```
+
+# Prioridades
+1. Generar predicciones rápidamente para tener un baseline con qué comparar el modelo
+2. Tratar outliers
+2. Más Feature Engineering
 
 # Ideas y cosas
 - probar un submission con todo el train set vs train/validation
+
+
+
+#################### 
+
+Posiblemente será útil más adelante tener features obtenidas aplicando binning a ciertas variables.
+
+
+TODOS: dividir en bins
+- housing age -> 5 o 10 años
+- lat y long
+- qué pasa con total rooms? comparemos con rooms/household y otros ratios. Igual con bedrooms
+- pop tmaibén tiene muchos outliers... pop/households
+
+Feature ideas:
+- median income per capita
+- 
+
+```{r}
+
+all_data$age_binned_5<-cut(all_data$housing_median_age, breaks = c(0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55), labels = F)
+#summary(all_data$age_binned_5)
+
+all_data$age_binned_10<-cut(all_data$housing_median_age, breaks = c(0, 10, 20, 30, 40, 50, 60), labels = F)
+
+cols<-all_data %>% select(age_binned_5, age_binned_10, median_house_value)
+corrplot( cor(cols),
+  method = "ellipse", 
+         type="full",
+        addCoef.col = rgb(0,0,0, alpha = 0.6), diag = TRUE, number.cex=0.77, 
+        col= colorRampPalette(c("red","white", "green"))(100))
+```
+
