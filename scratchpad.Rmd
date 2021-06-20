@@ -9,13 +9,18 @@ summary(read.csv("test.csv"))
 ```
 
 # Prioridades
-1. Generar predicciones rápidamente para tener un baseline con qué comparar el modelo
+1.DONE Generar predicciones rápidamente para tener un baseline con qué comparar el modelo
+1. Incluir age
 2. Tratar outliers
 2. Más Feature Engineering
+3. regularización
+3. residual plot
+
+when having spare tries: compare binning age with age
 
 # Ideas y cosas
 - probar un submission con todo el train set vs train/validation
-
+- Generalized linear model
 
 
 #################### 
@@ -25,7 +30,7 @@ Posiblemente será útil más adelante tener features obtenidas aplicando binnin
 
 TODOS: dividir en bins
 - housing age -> 5 o 10 años
-- lat y long
+- improve info out of lat y long (google regression with lat/long data)
 - qué pasa con total rooms? comparemos con rooms/household y otros ratios. Igual con bedrooms
 - pop tmaibén tiene muchos outliers... pop/households
 
@@ -48,3 +53,44 @@ corrplot( cor(cols),
         col= colorRampPalette(c("red","white", "green"))(100))
 ```
 
+
+### 70 15 15
+> rmse(predict(fit1, new), data$validate$median_house_value)*10000
+[1] 84630.61
+> rmse(predict(fit2, new), data$validate$median_house_value)*10000
+[1] 77402.96
+> rmse(predict(fit3, new), data$validate$median_house_value)*10000
+[1] 77398.13
+
+### 85 15
+
+> new<-data.frame(x1=data$validate$median_income, x2=data$validate$enc_ocean_proximity, x3=data$validate$total_rooms)
+> 
+> rmse(predict(fit1, new), data$validate$median_house_value)*10000
+[1] 84646.03
+> rmse(predict(fit2, new), data$validate$median_house_value)*10000
+[1] 77423.86
+> rmse(predict(fit3, new), data$validate$median_house_value)*10000
+[1] 77418.53
+
+
+
+
+######### 70 15 15
+
+> extract_xs<-function(df) {
++   return(data.frame(x1=df$median_income, x2=df$enc_ocean_proximity, x3=df$total_rooms, x4=df$latitude, x5=df$longitude))
++ }
+> 
+> xs<-extract_xs(data$validate)
+> 
+> rmse(predict(fit1, xs), data$validate$median_house_value)*10000
+[1] 84630.61
+> rmse(predict(fit2, xs), data$validate$median_house_value)*10000
+[1] 77402.96
+> rmse(predict(fit3, xs), data$validate$median_house_value)*10000
+[1] 77398.13
+> rmse(predict(fit4, xs), data$validate$median_house_value)*10000
+[1] 76516.55
+> rmse(predict(fit5, xs), data$validate$median_house_value)*10000
+[1] 73851.07

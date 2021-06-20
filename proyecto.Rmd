@@ -9,20 +9,25 @@ library(ggplot2)
 library(cleandata)
 library(corrplot)
 library(gridExtra)
-
+library(Metrics)
 ```
 
 # Pre-procesamiento, limpieza y análisis inicial
 ```{r}
 
+median_house_value_scale = 10000
+
 initialPreprocessing<-function(df) {
-  median_house_value_scale = 10000
   df$ocean_proximity<-as.factor(df$ocean_proximity)
-  df$median_house_value<-df$median_house_value / median_house_value_scale
   
   op_order<-c("INLAND", "<1H OCEAN", "NEAR OCEAN","NEAR BAY", "ISLAND")
-  enc_ocean_proximity<-encode_ordinal(data.frame(df[["ocean_proximity"]]), order=op_order, out.int=T)
-  df<-cbind(df, enc_ocean_proximity)
+  enc_ocean_proximity<-encode_ordinal(data.frame(enc_ocean_proximity=df[["ocean_proximity"]]), order=op_order, out.int=T)
+  df<-cbind(df, enc_ocean_proximity=enc_ocean_proximity)
+  
+  if("median_house_value" %in% colnames(df)) {
+      df$median_house_value<-df$median_house_value / median_house_value_scale
+  }
+  
   return(df)
 }
 
@@ -35,7 +40,7 @@ all_data
 ```
 
 Es bastante claro que al menos en cierta medida, la proximidad al océano afecta el precio. Esto nos da una pista de que podemos codificar esta variable como ordinal. Movimos esto a nuestra función de pre-procesamiento arriba para aprovecharlo en cualquier dataset.
-```{r}
+```{r eval=FALSE}
 all_data %>% 
   group_by(ocean_proximity) %>%
   summarize(mean_value = mean(median_house_value)) %>%
@@ -60,6 +65,7 @@ naCount / length(all_data$total_bedrooms) * 100
 Prácticamente 1% de datos faltantes. Nos ocuparemos de ellos, pero antes debemos divir los datos en train/test
 ```{r}
 set.seed(279720)
+#spec = c(train = .85, validate = .15)
 spec = c(train = .7, test = .15, validate = .15)
 
 g = sample(cut(
@@ -114,7 +120,7 @@ print(summary(data$validate$total_bedrooms))
 
 
 
-```{r fig.height=4, fig.width=12.5}
+```{r fig.height=4, fig.width=12.5, eval=FALSE}
 plot_outliers<-function(df, colname) {
   column<-sym(colname)
 
@@ -139,4 +145,78 @@ for (col in names(nasRemoved)) {
   plot_outliers(nasRemoved, col)
 }
 
+```
+```{r}
+# A first approach
+
+y<-data$train$median_house_value
+x1<-data$train$median_income
+x2<-data$train$enc_ocean_proximity
+x3<-data$train$total_rooms
+x4<-data$train$latitude
+x5<-data$train$longitude
+x6<-data$train$total_bedrooms
+x7<-data$train$housing_median_age
+x7_binned<-data$train$housing_median_age #FIXME
+
+fit1 <- lm(y ~ x1)
+fit2 <- lm(y ~ x1 + x2)
+fit3 <- lm(y ~ x1 + x2 + x3)
+fit4 <- lm(y ~ x1 + x2 + x3 + x4)
+fit5 <- lm(y ~ x1 + x2 + x3 + x4 + x5)
+fit6 <- lm(y ~ x1 + x2 + x3 + x4 + x5 + x6)
+fit7 <- lm(y ~ x1 + x2 + x3 + x4 + x5 + x6 + x7)
+fit7_binned <- lm(y ~ x1 + x2 + x3 + x4 + x5 + x6 + x7_binned)
+
+extract_xs<-function(df) {
+  return(data.frame(x1=df$median_income, x2=df$enc_ocean_proximity, x3=df$total_rooms, x4=df$latitude, x5=df$longitude, x6=df$total_bedrooms, x7=df$housing_median_age))
+}
+
+xs<-extract_xs(data$validate)
+
+rmse(predict(fit1, xs), data$validate$median_house_value)*median_house_value_scale
+rmse(predict(fit2, xs), data$validate$median_house_value)*median_house_value_scale
+rmse(predict(fit3, xs), data$validate$median_house_value)*median_house_value_scale
+rmse(predict(fit4, xs), data$validate$median_house_value)*median_house_value_scale
+rmse(predict(fit5, xs), data$validate$median_house_value)*median_house_value_scale
+rmse(predict(fit6, xs), data$validate$median_house_value)*median_house_value_scale
+rmse(predict(fit7, xs), data$validate$median_house_value)*median_house_value_scale
+
+```
+```{r}
+#summary(fit1)
+#summary(fit2)
+#summary(fit3)
+#summary(fit4)
+#summary(fit5)
+summary(fit6)
+summary(fit7)
+```
+
+```{r}
+testing_set<-loadAndPreprocess("test.csv")
+testing_set<-imp_total_bedrooms(testing_set)
+
+```
+
+```{r}
+timestamp<-function() {
+  my_options <- options(digits.secs = 3)
+  timestamp<-strftime(Sys.time(), "%m%d_%H%M%OS")
+  options(my_options)  
+  return(timestamp)
+}
+
+writePredictions<-function(predictions, name, ids=testing_set$id) {
+  data<-cbind(id=ids, median_house_value=predictions*median_house_value_scale)
+  filename<-paste("predictions/", timestamp(), "_", name, sep="")
+  write.csv(data, filename, row.names = FALSE, quote=FALSE)
+}
+
+```
+
+
+```{r}
+xs_test<-extract_xs(testing_set)
+writePredictions(predict(fit7, xs_test), "fit7-withAge")
 ```
