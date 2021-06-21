@@ -11,7 +11,7 @@ summary(read.csv("test.csv"))
 # Prioridades
 1.DONE Generar predicciones rápidamente para tener un baseline con qué comparar el modelo
 1.DONE Incluir age
-2. Tratar outliers
+2. Tratar outliers -> get some quick features
 2. scaling
 2. k-folds
    ditch 3 way split, use 80/20
@@ -27,14 +27,18 @@ when having spare tries: compare binning age with age
 - probar un submission con todo el train set vs train/validation
 - Generalized linear model
 - regression techniques for lat/long data
+- split income in buckets
+- median house value of neighbors?
 
 
 # Interesting bits of info
 - The Log Transform is one of the most popular Transformation techniques out there. It is primarily used to convert a skewed distribution to a normal distribution/less-skewed distribution.
-- knn imputation is a thing
+- knn imputation is a thing\
+- Normalization can be dramatically affected by outliner data while standardization handles outliers very well.Fact check this
 
 
 ## outlier treatment
+total_rooms, total bedrooms, population (?), households (?), median-income, mhvalue
 
 #################### 
 
@@ -44,7 +48,6 @@ Posiblemente será útil más adelante tener features obtenidas aplicando binnin
 TODOS: dividir en bins
 - housing age -> 5 o 10 años
 - improve info out of lat y long (google regression with lat/long data)
-- qué pasa con total rooms? comparemos con rooms/household y otros ratios. Igual con bedrooms
 - pop tmaibén tiene muchos outliers... pop/households
 
 Feature ideas:
@@ -107,3 +110,29 @@ corrplot( cor(cols),
 [1] 76516.55
 > rmse(predict(fit5, xs), data$validate$median_house_value)*10000
 [1] 73851.07
+
+
+> rmse(predict(fit8,  xs_with_extras), data$validate$median_house_value)*median_house_value_scale
+[1] 71356.62
+> rmse(predict(fit9,  xs_with_extras), data$validate$median_house_value)*median_house_value_scale
+[1] 69319.22
+> rmse(predict(fit10, xs_with_extras), data$validate$median_house_value)*median_house_value_scale
+[1] 66881.95
+> rmse(predict(fit11, xs_with_extras), data$validate$median_house_value)*median_house_value_scale
+[1] 66844.3
+> 
+
+
+###### 80 20 ditch 3-way partition
+> rmse(predict(fit7, xs), data$validate$median_house_value)*median_house_value_scale
+[1] 71770.85
+> 
+> rmse(predict(fit8,  xs_with_extras), data$validate$median_house_value)*median_house_value_scale
+[1] 71466.84
+> rmse(predict(fit9,  xs_with_extras), data$validate$median_house_value)*median_house_value_scale
+[1] 69383.31
+> rmse(predict(fit10, xs_with_extras), data$validate$median_house_value)*median_house_value_scale
+[1] 66967.63
+> rmse(predict(fit11, xs_with_extras), data$validate$median_house_value)*median_house_value_scale
+[1] 66920.66
+

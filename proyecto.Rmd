@@ -66,8 +66,8 @@ naCount / length(all_data$total_bedrooms) * 100
 Prácticamente 1% de datos faltantes. Nos ocuparemos de ellos, pero antes debemos divir los datos en train/test
 ```{r}
 set.seed(279720)
-#spec = c(train = .85, validate = .15)
-spec = c(train = .7, test = .15, validate = .15)
+spec = c(train = .80, validate = .20)
+#spec = c(train = .7, test = .15, validate = .15)
 
 g = sample(cut(
   seq(nrow(all_data)), 
@@ -109,7 +109,6 @@ imp_total_bedrooms<-function(df, traindata=nasRemoved) {
 }
 
 data$train<-imp_total_bedrooms(data$train)
-data$test<-imp_total_bedrooms(data$test)
 data$validate<-imp_total_bedrooms(data$validate)
 
 print(summary(data$train$total_bedrooms))
@@ -192,14 +191,14 @@ rmse(predict(fit7, xs), data$validate$median_house_value)*median_house_value_sca
 #summary(fit3)
 #summary(fit4)
 #summary(fit5)
-summary(fit6)
-summary(fit7)
+#summary(fit6)
+#summary(fit7)
 ```
 
 ```{r}
 testing_set<-loadAndPreprocess("test.csv")
 testing_set<-imp_total_bedrooms(testing_set)
-
+summary(testing_set$total_bedrooms)
 ```
 
 ```{r}
@@ -223,3 +222,131 @@ writePredictions<-function(predictions, name, ids=testing_set$id) {
 #xs_test<-extract_xs(testing_set)
 #writePredictions(predict(fit7, xs_test), "fit7-withAge")
 ```
+
+# Creación y análisis de nuevos features
+
+```{r}
+
+beds_per_rooms<-data$train$total_bedrooms / data$train$total_rooms
+summary(beds_per_rooms)
+
+rooms_per_household<-data$train$total_rooms / data$train$households
+summary(rooms_per_household)
+
+income_per_capita<-data$train$median_income/data$train$population
+summary(income_per_capita)
+
+
+income_per_household<-data$train$median_income/data$train$households
+summary(income_per_household)
+
+beds_per_capita<-data$train$total_bedrooms / data$train$population
+summary(beds_per_capita)
+
+rooms_per_capita<-data$train$total_rooms / data$train$population
+summary(rooms_per_capita)
+
+
+# check this one agian after doing something with the outliers
+pop_per_household<-data$train$population/data$train$households
+summary(pop_per_household)
+  
+candidates<-data.frame(beds_per_rooms, rooms_per_household, income_per_capita, income_per_household, beds_per_capita, rooms_per_capita, pop_per_household, data$train$median_house_value)
+
+corrplot(cor(candidates), 
+         method = "ellipse", 
+         type="full",
+        addCoef.col = rgb(0,0,0, alpha = 0.6), diag = TRUE, number.cex=0.77, 
+        col= colorRampPalette(c("red","white", "green"))(100))
+```
+```{r}
+addExtraFeats<-function(df) {
+  beds_per_rooms<-df$total_bedrooms / df$total_rooms
+
+  rooms_per_household<-df$total_rooms / df$households
+
+  income_per_capita<-df$median_income/df$population
+  
+  income_per_household<-df$median_income/df$households
+
+  beds_per_capita<-df$total_bedrooms / df$population
+
+  rooms_per_capita<-df$total_rooms / df$population
+
+  # check this one agian after doing something with the outliers
+  pop_per_household<-df$population/df$households
+
+  #candidates<-data.frame(beds_per_rooms, rooms_per_household, income_per_capita, income_per_household, beds_per_capita, rooms_per_capita, pop_per_household, df$median_house_value)
+  
+  return(cbind(df, beds_per_rooms, rooms_per_capita, rooms_per_household, income_per_capita))
+
+}
+
+train_with_extras<-addExtraFeats(data$train)
+validation_with_extras<-addExtraFeats(data$validate)
+
+extract_xs_with_extras<-function(df) {
+  return(cbind(extract_xs(df), data.frame(w1=df$beds_per_rooms, w2=df$rooms_per_capita, w3=df$rooms_per_household, w4=df$income_per_capita)))
+}
+
+
+w1<-train_with_extras$beds_per_rooms
+w2<-train_with_extras$rooms_per_capita
+w3<-train_with_extras$rooms_per_household
+w4<-train_with_extras$income_per_capita
+
+fit8 <- lm(y ~ x1 + x2 + x3 + x4 + x5 + x6 + x7 + w1)
+fit9 <- lm(y ~ x1 + x2 + x3 + x4 + x5 + x6 + x7 + w1 + w2)
+fit10 <- lm(y ~ x1 + x2 + x3 + x4 + x5 + x6 + x7 + w1 + w2 + w3)
+fit11 <- lm(y ~ x1 + x2 + x3 + x4 + x5 + x6 + x7 + w1 + w2 + w3 +w4)
+
+xs_with_extras<-extract_xs_with_extras(validation_with_extras)
+
+summary(fit8)
+summary(fit9)
+summary(fit10)
+summary(fit11)
+
+rmse(predict(fit8,  xs_with_extras), data$validate$median_house_value)*median_house_value_scale
+rmse(predict(fit9,  xs_with_extras), data$validate$median_house_value)*median_house_value_scale
+rmse(predict(fit10, xs_with_extras), data$validate$median_house_value)*median_house_value_scale
+rmse(predict(fit11, xs_with_extras), data$validate$median_house_value)*median_house_value_scale
+```
+
+
+```{r}
+
+test_with_extras<-addExtraFeats(testing_set)
+xs_test_ex<-extract_xs_with_extras(test_with_extras)
+writePredictions(predict(fit10, xs_test_ex), "fit10")
+writePredictions(predict(fit11, xs_test_ex), "fit11")
+```
+
+
+
+```{r}
+outlier_values <- boxplot.stats(data$train$total_rooms)$out  # outlier values.
+boxplot(data$train$total_rooms, main="total_rooms", boxwex=0.1)
+print(outlier_values)
+
+outlier_values <- boxplot.stats(data$train$total_bedrooms)$out  # outlier values.
+boxplot(data$train$total_bedrooms, main="total_bedrooms", boxwex=0.1)
+print(outlier_values)
+
+outlier_values <- boxplot.stats(data$train$population)$out  # outlier values.
+boxplot(data$train$population, main="population", boxwex=0.1)
+print(outlier_values)
+
+outlier_values <- boxplot.stats(data$train$households)$out  # outlier values.
+boxplot(data$train$households, main="households", boxwex=0.1)
+print(outlier_values)
+
+outlier_values <- boxplot.stats(data$train$median_income)$out  # outlier values.
+boxplot(data$train$median_income, main="median_income", boxwex=0.1)
+print(outlier_values)
+
+outlier_values <- boxplot.stats(data$train$median_house_value)$out  # outlier values.
+boxplot(data$train$median_house_value, main="median_house_value", boxwex=0.1)
+print(outlier_values)
+```
+
