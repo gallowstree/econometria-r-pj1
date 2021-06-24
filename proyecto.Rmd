@@ -11,6 +11,10 @@ library(corrplot)
 library(gridExtra)
 library(Metrics)
 library(caret)
+library(MASS)
+library(robustbase)
+library(cvTools)
+
 ```
 
 # Pre-procesamiento, limpieza y análisis inicial
@@ -81,7 +85,7 @@ data = split(all_data, g)
 
 ```{r}
 nasRemoved<-data$train %>% 
-  select(-c(ocean_proximity, id)) %>%
+  dplyr::select(-c(ocean_proximity, id)) %>%
   filter(!is.na(total_bedrooms))
          
 corrplot(cor(nasRemoved), 
@@ -112,7 +116,6 @@ data$train<-imp_total_bedrooms(data$train)
 data$validate<-imp_total_bedrooms(data$validate)
 
 print(summary(data$train$total_bedrooms))
-print(summary(data$test$total_bedrooms))
 print(summary(data$validate$total_bedrooms))
 
 ```
@@ -120,7 +123,7 @@ print(summary(data$validate$total_bedrooms))
 
 
 
-```{r fig.height=4, fig.width=12.5, eval=FALSE}
+```{r fig.height=4, fig.width=12.5}
 plot_outliers<-function(df, colname) {
   column<-sym(colname)
 
@@ -140,60 +143,35 @@ plot_outliers<-function(df, colname) {
 
   grid.arrange(hist, box, qq, ncol=3)
 }
+```
 
+
+```{r fig.height=4, fig.width=12.5, eval=FALSE}
 for (col in names(nasRemoved)) {
   plot_outliers(nasRemoved, col)
 }
-
 ```
+
+
+
 ```{r}
-# A first approach
+# remover outliers detectados a mano
+#print(nrow(data$train))
+#data$train<-data$train[-match(c(7589, 13996, 8834, 6377, 5815, 7589, 8919, 3137), rownames(data$train)),]
+#data$train<-data$train[-c(7589, 13996, 8834, 6377, 5815, 7589, 8919, 3137),]
+#print(nrow(data$train))
 
-y<-data$train$median_house_value
-x1<-data$train$median_income
-x2<-data$train$enc_ocean_proximity
-x3<-data$train$total_rooms
-x4<-data$train$latitude
-x5<-data$train$longitude
-x6<-data$train$total_bedrooms
-x7<-data$train$housing_median_age
-x7_binned<-data$train$housing_median_age #FIXME
-
-fit1 <- lm(y ~ x1)
-fit2 <- lm(y ~ x1 + x2)
-fit3 <- lm(y ~ x1 + x2 + x3)
-fit4 <- lm(y ~ x1 + x2 + x3 + x4)
-fit5 <- lm(y ~ x1 + x2 + x3 + x4 + x5)
-fit6 <- lm(y ~ x1 + x2 + x3 + x4 + x5 + x6)
-fit7 <- lm(y ~ x1 + x2 + x3 + x4 + x5 + x6 + x7)
-fit7_binned <- lm(y ~ x1 + x2 + x3 + x4 + x5 + x6 + x7_binned)
-
-extract_xs<-function(df) {
-  return(data.frame(x1=df$median_income, x2=df$enc_ocean_proximity, x3=df$total_rooms, x4=df$latitude, x5=df$longitude, x6=df$total_bedrooms, x7=df$housing_median_age))
-}
-
-xs<-extract_xs(data$validate)
-
-rmse(predict(fit1, xs), data$validate$median_house_value)*median_house_value_scale
-rmse(predict(fit2, xs), data$validate$median_house_value)*median_house_value_scale
-rmse(predict(fit3, xs), data$validate$median_house_value)*median_house_value_scale
-rmse(predict(fit4, xs), data$validate$median_house_value)*median_house_value_scale
-rmse(predict(fit5, xs), data$validate$median_house_value)*median_house_value_scale
-rmse(predict(fit6, xs), data$validate$median_house_value)*median_house_value_scale
-rmse(predict(fit7, xs), data$validate$median_house_value)*median_house_value_scale
-
-
-
+# nasRemoved<-data$train %>% 
+#   select(-c(ocean_proximity, id)) %>%
+#   filter(!is.na(total_bedrooms))
+# 
+# 
+# for (col in names(nasRemoved)) {
+#   plot_outliers(nasRemoved, col)
+# }
+# 
 ```
-```{r}
-#summary(fit1)
-#summary(fit2)
-#summary(fit3)
-#summary(fit4)
-#summary(fit5)
-#summary(fit6)
-#summary(fit7)
-```
+
 
 ```{r}
 testing_set<-loadAndPreprocess("test.csv")
@@ -218,14 +196,11 @@ writePredictions<-function(predictions, name, ids=testing_set$id) {
 ```
 
 
-```{r}
-#xs_test<-extract_xs(testing_set)
-#writePredictions(predict(fit7, xs_test), "fit7-withAge")
-```
+
 
 # Creación y análisis de nuevos features
 
-```{r}
+```{r eval=FALSE}
 
 beds_per_rooms<-data$train$total_bedrooms / data$train$total_rooms
 summary(beds_per_rooms)
@@ -259,7 +234,17 @@ corrplot(cor(candidates),
         addCoef.col = rgb(0,0,0, alpha = 0.6), diag = TRUE, number.cex=0.77, 
         col= colorRampPalette(c("red","white", "green"))(100))
 ```
+
+
 ```{r}
+extract_xs<-function(df) {
+  return(data.frame(x1=df$median_income, x2=df$enc_ocean_proximity, x3=df$total_rooms, x4=df$latitude, x5=df$longitude, x6=df$total_bedrooms, x7=df$housing_median_age))
+}
+
+extract_xs_with_extras<-function(df) {
+  return(cbind(extract_xs(df), data.frame(w1=df$beds_per_rooms, w2=df$rooms_per_capita, w3=df$rooms_per_household, w4=df$income_per_capita)))
+}
+
 addExtraFeats<-function(df) {
   beds_per_rooms<-df$total_bedrooms / df$total_rooms
 
@@ -281,13 +266,29 @@ addExtraFeats<-function(df) {
   return(cbind(df, beds_per_rooms, rooms_per_capita, rooms_per_household, income_per_capita))
 
 }
+```
 
+```{r}
+data$train<-addExtraFeats(data$train)
+```
+
+
+```{r eval=FALSE}
 train_with_extras<-addExtraFeats(data$train)
+print(nrow(train_with_extras))
+
+
 validation_with_extras<-addExtraFeats(data$validate)
 
-extract_xs_with_extras<-function(df) {
-  return(cbind(extract_xs(df), data.frame(w1=df$beds_per_rooms, w2=df$rooms_per_capita, w3=df$rooms_per_household, w4=df$income_per_capita)))
-}
+y<- train_with_extras$median_house_value
+x1<-train_with_extras$median_income
+x2<-train_with_extras$enc_ocean_proximity
+x3<-train_with_extras$total_rooms
+x4<-train_with_extras$latitude
+x5<-train_with_extras$longitude
+x6<-train_with_extras$total_bedrooms
+x7<-train_with_extras$housing_median_age
+#x7_binned<-data$train$housing_median_age #FIXME
 
 
 w1<-train_with_extras$beds_per_rooms
@@ -295,31 +296,31 @@ w2<-train_with_extras$rooms_per_capita
 w3<-train_with_extras$rooms_per_household
 w4<-train_with_extras$income_per_capita
 
-fit8 <- lm(y ~ x1 + x2 + x3 + x4 + x5 + x6 + x7 + w1)
-fit9 <- lm(y ~ x1 + x2 + x3 + x4 + x5 + x6 + x7 + w1 + w2)
-fit10 <- lm(y ~ x1 + x2 + x3 + x4 + x5 + x6 + x7 + w1 + w2 + w3)
-fit11 <- lm(y ~ x1 + x2 + x3 + x4 + x5 + x6 + x7 + w1 + w2 + w3 +w4)
+fit8 <- lm(y ~ x1 + x2 + x3 + x4 + x5 + x6 + x7 + w1, data=train_with_extras)
+fit9 <- lm(y ~ x1 + x2 + x3 + x4 + x5 + x6 + x7 + w1 + w2, data=train_with_extras)
+fit10 <- lm(y ~ x1 + x2 + x3 + x4 + x5 + x6 + x7 + w1 + w2 + w3, data=train_with_extras)
+fit11 <- lm(y ~ x1 + x2 + x3 + x4 + x5 + x6 + x7 + w1 + w2 + w3 +w4, data=train_with_extras)
 
 xs_with_extras<-extract_xs_with_extras(validation_with_extras)
 
-summary(fit8)
-summary(fit9)
-summary(fit10)
-summary(fit11)
+#summary(fit8)
+#summary(fit9)
+#summary(fit10)
+#summary(fit11)
 
-rmse(predict(fit8,  xs_with_extras), data$validate$median_house_value)*median_house_value_scale
-rmse(predict(fit9,  xs_with_extras), data$validate$median_house_value)*median_house_value_scale
-rmse(predict(fit10, xs_with_extras), data$validate$median_house_value)*median_house_value_scale
-rmse(predict(fit11, xs_with_extras), data$validate$median_house_value)*median_house_value_scale
+#rmse(predict(fit8,  xs_with_extras), data$validate$median_house_value)*median_house_value_scale
+#rmse(predict(fit9,  xs_with_extras), data$validate$median_house_value)*median_house_value_scale
+#rmse(predict(fit10, xs_with_extras), data$validate$median_house_value)*median_house_value_scale
+#rmse(predict(fit11, xs_with_extras), data$validate$median_house_value)*median_house_value_scale
 ```
 
 
 ```{r}
 
-test_with_extras<-addExtraFeats(testing_set)
-xs_test_ex<-extract_xs_with_extras(test_with_extras)
-writePredictions(predict(fit10, xs_test_ex), "fit10")
-writePredictions(predict(fit11, xs_test_ex), "fit11")
+# test_with_extras<-addExtraFeats(testing_set)
+# xs_test_ex<-extract_xs_with_extras(test_with_extras)
+# writePredictions(predict(fit10, xs_test_ex), "fit10")
+# writePredictions(predict(fit11, xs_test_ex), "fit11")
 ```
 
 
@@ -350,3 +351,96 @@ boxplot(data$train$median_house_value, main="median_house_value", boxwex=0.1)
 print(outlier_values)
 ```
 
+
+```{r fig.height=10, fig.width=10}
+cooksd<-cooks.distance(fit11)
+plot(cooksd, pch="*", cex=1, main="Influential Obs by Cooks distance")  # plot cook's distance
+abline(h = 4*mean(cooksd, na.rm=T), col="red")  # add cutoff line
+text(x=1:length(cooksd)+1, y=cooksd, labels=ifelse(cooksd>4*mean(cooksd, na.rm=T),names(cooksd),""), col="red")  # add labels
+```
+
+
+```{r}
+
+distances<-data.frame(d=cooksd[cooksd>4*mean(cooksd, na.rm=T)])
+distances<-distances %>% arrange(desc(d))
+indices<-as.integer(row.names(distances))
+
+train_with_extras[13996,] #%>% select(total_rooms, total_bedrooms, population, households, median_income)
+
+```
+
+```{r}
+distances<-data.frame(d=cooksd[cooksd>4*mean(cooksd, na.rm=T)])
+distances<-distances %>% arrange(desc(d))
+indices<-as.integer(row.names(distances))
+class(indices)
+
+train_with_extras[match(indices, rownames(train_with_extras)),]
+# 7589, 13996, 8834, 6377, 5815, 7589, 8919, 3137
+```
+
+
+
+
+```{r}
+car::outlierTest(fit11)
+```
+```{r fig.height=10, fig.width=10}
+
+
+train_with_extras<-train_with_extras[-match(indices[1:20], rownames(train_with_extras)),]
+
+y<- train_with_extras$median_house_value
+x1<-train_with_extras$median_income
+x2<-train_with_extras$enc_ocean_proximity
+x3<-train_with_extras$total_rooms
+x4<-train_with_extras$latitude
+x5<-train_with_extras$longitude
+x6<-train_with_extras$total_bedrooms
+x7<-train_with_extras$housing_median_age
+#x7_binned<-data$train$housing_median_age #FIXME
+
+
+w1<-train_with_extras$beds_per_rooms
+w2<-train_with_extras$rooms_per_capita
+w3<-train_with_extras$rooms_per_household
+w4<-train_with_extras$income_per_capita
+
+
+
+fit11_ <- lm(y ~ x1 + x2 + x3 + x4 + x5 + x6 + x7 + w1 + w2 + w3 +w4, data=train_with_extras)
+
+cooksd<-cooks.distance(fit11_)
+plot(cooksd, pch="*", cex=1, main="Influential Obs by Cooks distance")  # plot cook's distance
+abline(h = 4*mean(cooksd, na.rm=T), col="red")  # add cutoff line
+text(x=1:length(cooksd)+1, y=cooksd, labels=ifelse(cooksd>4*mean(cooksd, na.rm=T),names(cooksd),""), col="red")  # add labels
+
+car::outlierTest(fit11_)
+
+```
+```{r}
+
+rmse(predict(fit11, xs_with_extras), data$validate$median_house_value)*median_house_value_scale
+rmse(predict(fit11_, xs_with_extras), data$validate$median_house_value)*median_house_value_scale
+
+print(nrow(train_with_extras))
+```
+
+```{r}
+test_with_extras<-addExtraFeats(testing_set)
+ xs_test_ex<-extract_xs_with_extras(test_with_extras)
+ writePredictions(predict(fit11_, xs_test_ex), "fit11_OL")
+# writePredictions(predict(fit11, xs_test_ex), "fit11")
+```
+
+
+```{r}
+folds <- cvFolds(nrow(train_with_extras), K = 5, R = 10)
+repCV(fit11, cost = rmspe, folds = folds)
+repCV(fit11_, cost = rmspe, folds = folds)
+
+
+
+```
+ 
