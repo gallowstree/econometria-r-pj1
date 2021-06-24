@@ -2,7 +2,7 @@
 title: "Proyecto HousePrices :P"
 output: html_notebook
 ---
-
+# Librerías
 ```{r message=FALSE, warning=FALSE}
 library(dplyr)
 library(ggplot2)
@@ -26,7 +26,7 @@ initialPreprocessing<-function(df) {
   df$ocean_proximity<-as.factor(df$ocean_proximity)
   
   op_order<-c("INLAND", "<1H OCEAN", "NEAR OCEAN","NEAR BAY", "ISLAND")
-  enc_ocean_proximity<-encode_ordinal(data.frame(enc_ocean_proximity=df[["ocean_proximity"]]), order=op_order, out.int=T)
+  enc_ocean_proximity<-encode_ordinal(data.frame(enc_ocean_proximity=df[["ocean_proximity"]]), order=op_order, out.int=T, full_print = F)
   df<-cbind(df, enc_ocean_proximity=enc_ocean_proximity)
   
   if("median_house_value" %in% colnames(df)) {
@@ -95,6 +95,7 @@ corrplot(cor(nasRemoved),
         col= colorRampPalette(c("red","white", "green"))(100))
 ```
 
+# Imputación
 Vemos que nuestra variable con NAs (total_bedrooms) tiene correlación casi perfecta con households, por lo que usaremos el valor de esta para obtener datos de imputación. 
 
 ```{r}
@@ -122,7 +123,7 @@ print(summary(data$validate$total_bedrooms))
 
 
 
-
+# Outliers pt.1
 ```{r fig.height=4, fig.width=12.5}
 plot_outliers<-function(df, colname) {
   column<-sym(colname)
@@ -153,179 +154,100 @@ for (col in names(nasRemoved)) {
 ```
 
 
-
-```{r}
-# remover outliers detectados a mano
-#print(nrow(data$train))
-#data$train<-data$train[-match(c(7589, 13996, 8834, 6377, 5815, 7589, 8919, 3137), rownames(data$train)),]
-#data$train<-data$train[-c(7589, 13996, 8834, 6377, 5815, 7589, 8919, 3137),]
-#print(nrow(data$train))
-
-# nasRemoved<-data$train %>% 
-#   select(-c(ocean_proximity, id)) %>%
-#   filter(!is.na(total_bedrooms))
-# 
-# 
-# for (col in names(nasRemoved)) {
-#   plot_outliers(nasRemoved, col)
-# }
-# 
-```
-
-
-```{r}
-testing_set<-loadAndPreprocess("test.csv")
-testing_set<-imp_total_bedrooms(testing_set)
-summary(testing_set$total_bedrooms)
-```
-
-```{r}
-timestamp<-function() {
-  my_options <- options(digits.secs = 3)
-  timestamp<-strftime(Sys.time(), "%m%d_%H%M%OS")
-  options(my_options)  
-  return(timestamp)
-}
-
-writePredictions<-function(predictions, name, ids=testing_set$id) {
-  data<-cbind(id=ids, median_house_value=predictions*median_house_value_scale)
-  filename<-paste("predictions/", timestamp(), "_", name, ".csv", sep="")
-  write.csv(data, filename, row.names = FALSE, quote=FALSE)
-}
-
-```
-
-
-
-
 # Creación y análisis de nuevos features
 
-```{r eval=FALSE}
-
+```{r eval=FALSE, fig.width=7.5, }
 beds_per_rooms<-data$train$total_bedrooms / data$train$total_rooms
-summary(beds_per_rooms)
-
 rooms_per_household<-data$train$total_rooms / data$train$households
-summary(rooms_per_household)
-
 income_per_capita<-data$train$median_income/data$train$population
-summary(income_per_capita)
-
-
 income_per_household<-data$train$median_income/data$train$households
-summary(income_per_household)
-
 beds_per_capita<-data$train$total_bedrooms / data$train$population
-summary(beds_per_capita)
-
 rooms_per_capita<-data$train$total_rooms / data$train$population
-summary(rooms_per_capita)
+pop_per_household<-data$train$population/data$train$households # check this one agian after doing something with the outliers
+pop_per_bedroom<-data$train$population/data$train$total_bedrooms
+pop_per_room<-data$train$population/data$train$total_rooms
 
+candidates<-data.frame(beds_per_rooms, rooms_per_household, income_per_capita, income_per_household, beds_per_capita, rooms_per_capita, pop_per_household, pop_per_bedroom, pop_per_room, data$train$median_house_value)
 
-# check this one agian after doing something with the outliers
-pop_per_household<-data$train$population/data$train$households
-summary(pop_per_household)
-  
-candidates<-data.frame(beds_per_rooms, rooms_per_household, income_per_capita, income_per_household, beds_per_capita, rooms_per_capita, pop_per_household, data$train$median_house_value)
-
+summary(candidates)
 corrplot(cor(candidates), 
          method = "ellipse", 
          type="full",
-        addCoef.col = rgb(0,0,0, alpha = 0.6), diag = TRUE, number.cex=0.77, 
+        addCoef.col = rgb(0,0,0, alpha = 0.6), diag = TRUE, number.cex=0.7,  tl.cex=0.75 , 
         col= colorRampPalette(c("red","white", "green"))(100))
 ```
 
 
 ```{r}
-extract_xs<-function(df) {
-  return(data.frame(x1=df$median_income, x2=df$enc_ocean_proximity, x3=df$total_rooms, x4=df$latitude, x5=df$longitude, x6=df$total_bedrooms, x7=df$housing_median_age))
-}
-
-extract_xs_with_extras<-function(df) {
-  return(cbind(extract_xs(df), data.frame(w1=df$beds_per_rooms, w2=df$rooms_per_capita, w3=df$rooms_per_household, w4=df$income_per_capita)))
-}
 
 addExtraFeats<-function(df) {
-  beds_per_rooms<-df$total_bedrooms / df$total_rooms
-
-  rooms_per_household<-df$total_rooms / df$households
-
-  income_per_capita<-df$median_income/df$population
+  if("beds_per_rooms" %in% colnames(df)) { 
+    return(df)
+  }
   
+  beds_per_rooms<-df$total_bedrooms / df$total_rooms
+  rooms_per_household<-df$total_rooms / df$households
+  income_per_capita<-df$median_income/df$population
   income_per_household<-df$median_income/df$households
-
   beds_per_capita<-df$total_bedrooms / df$population
-
   rooms_per_capita<-df$total_rooms / df$population
-
-  # check this one agian after doing something with the outliers
-  pop_per_household<-df$population/df$households
-
-  #candidates<-data.frame(beds_per_rooms, rooms_per_household, income_per_capita, income_per_household, beds_per_capita, rooms_per_capita, pop_per_household, df$median_house_value)
+  pop_per_household<-df$population/df$households  # check this one agian after doing something with the outliers
   
   return(cbind(df, beds_per_rooms, rooms_per_capita, rooms_per_household, income_per_capita))
-
 }
+
 ```
 
 ```{r}
 data$train<-addExtraFeats(data$train)
+data$validate<-addExtraFeats(data$validate)
 ```
 
+# Entrenamiento de modelo pt.1
 
+```{r}
+model_rmse<-function(model, observations, actual_values, scale=median_house_value_scale) {
+  predictions<-predict(model, observations)
+  return(rmse(predictions, actual_values)*scale)
+}
+```
+
+```{r}
+training_vars_1<-data$train %>%
+  dplyr::select(median_house_value, 
+                median_income,
+                enc_ocean_proximity,
+                total_rooms,
+                latitude,
+                longitude,
+                total_bedrooms,
+                housing_median_age,
+                beds_per_rooms,
+                rooms_per_capita,
+                rooms_per_household,
+                income_per_capita)
+
+fit1<-lm(median_house_value ~ ., data = training_vars_1)
+
+```
+
+```{r}
+
+scores<-function(model, xs=data$validate, y=data$validate$median_house_value) {
+  folds <- cvFolds(nrow(xs), K = 5, R = 10)
+  return(data.frame(
+    validation_error=model_rmse(model, xs, y),
+    k_fold_cv_error=repCV(model, cost = rmspe, folds = folds)$cv[[1]]*median_house_value_scale
+  ))
+}
+
+scores(fit1)
+
+```
+
+# Outliers pt.2
+## plots
 ```{r eval=FALSE}
-train_with_extras<-addExtraFeats(data$train)
-print(nrow(train_with_extras))
-
-
-validation_with_extras<-addExtraFeats(data$validate)
-
-y<- train_with_extras$median_house_value
-x1<-train_with_extras$median_income
-x2<-train_with_extras$enc_ocean_proximity
-x3<-train_with_extras$total_rooms
-x4<-train_with_extras$latitude
-x5<-train_with_extras$longitude
-x6<-train_with_extras$total_bedrooms
-x7<-train_with_extras$housing_median_age
-#x7_binned<-data$train$housing_median_age #FIXME
-
-
-w1<-train_with_extras$beds_per_rooms
-w2<-train_with_extras$rooms_per_capita
-w3<-train_with_extras$rooms_per_household
-w4<-train_with_extras$income_per_capita
-
-fit8 <- lm(y ~ x1 + x2 + x3 + x4 + x5 + x6 + x7 + w1, data=train_with_extras)
-fit9 <- lm(y ~ x1 + x2 + x3 + x4 + x5 + x6 + x7 + w1 + w2, data=train_with_extras)
-fit10 <- lm(y ~ x1 + x2 + x3 + x4 + x5 + x6 + x7 + w1 + w2 + w3, data=train_with_extras)
-fit11 <- lm(y ~ x1 + x2 + x3 + x4 + x5 + x6 + x7 + w1 + w2 + w3 +w4, data=train_with_extras)
-
-xs_with_extras<-extract_xs_with_extras(validation_with_extras)
-
-#summary(fit8)
-#summary(fit9)
-#summary(fit10)
-#summary(fit11)
-
-#rmse(predict(fit8,  xs_with_extras), data$validate$median_house_value)*median_house_value_scale
-#rmse(predict(fit9,  xs_with_extras), data$validate$median_house_value)*median_house_value_scale
-#rmse(predict(fit10, xs_with_extras), data$validate$median_house_value)*median_house_value_scale
-#rmse(predict(fit11, xs_with_extras), data$validate$median_house_value)*median_house_value_scale
-```
-
-
-```{r}
-
-# test_with_extras<-addExtraFeats(testing_set)
-# xs_test_ex<-extract_xs_with_extras(test_with_extras)
-# writePredictions(predict(fit10, xs_test_ex), "fit10")
-# writePredictions(predict(fit11, xs_test_ex), "fit11")
-```
-
-
-
-```{r}
 outlier_values <- boxplot.stats(data$train$total_rooms)$out  # outlier values.
 boxplot(data$train$total_rooms, main="total_rooms", boxwex=0.1)
 print(outlier_values)
@@ -351,61 +273,33 @@ boxplot(data$train$median_house_value, main="median_house_value", boxwex=0.1)
 print(outlier_values)
 ```
 
-
-```{r fig.height=10, fig.width=10}
-cooksd<-cooks.distance(fit11)
+## cook's distance
+```{r fig.height=7, fig.width=9}
+cooksd<-cooks.distance(fit1)
 plot(cooksd, pch="*", cex=1, main="Influential Obs by Cooks distance")  # plot cook's distance
 abline(h = 4*mean(cooksd, na.rm=T), col="red")  # add cutoff line
 text(x=1:length(cooksd)+1, y=cooksd, labels=ifelse(cooksd>4*mean(cooksd, na.rm=T),names(cooksd),""), col="red")  # add labels
 ```
 
-
-```{r}
-
-distances<-data.frame(d=cooksd[cooksd>4*mean(cooksd, na.rm=T)])
-distances<-distances %>% arrange(desc(d))
-indices<-as.integer(row.names(distances))
-
-train_with_extras[13996,] #%>% select(total_rooms, total_bedrooms, population, households, median_income)
-
-```
-
 ```{r}
 distances<-data.frame(d=cooksd[cooksd>4*mean(cooksd, na.rm=T)])
 distances<-distances %>% arrange(desc(d))
 indices<-as.integer(row.names(distances))
-class(indices)
+indices
 
-train_with_extras[match(indices, rownames(train_with_extras)),]
+data$train[match(indices, rownames(data$train)),]
 # 7589, 13996, 8834, 6377, 5815, 7589, 8919, 3137
+
 ```
-
-
-
-
+## outliers test
 ```{r}
-car::outlierTest(fit11)
+car::outlierTest(fit1)
 ```
-```{r fig.height=10, fig.width=10}
 
-
+# Entrenamiento de modelos sin outliers
+```{r fig.height=10, fig.width=10, eval=FALSE}
 train_with_extras<-train_with_extras[-match(indices[1:20], rownames(train_with_extras)),]
 
-y<- train_with_extras$median_house_value
-x1<-train_with_extras$median_income
-x2<-train_with_extras$enc_ocean_proximity
-x3<-train_with_extras$total_rooms
-x4<-train_with_extras$latitude
-x5<-train_with_extras$longitude
-x6<-train_with_extras$total_bedrooms
-x7<-train_with_extras$housing_median_age
-#x7_binned<-data$train$housing_median_age #FIXME
-
-
-w1<-train_with_extras$beds_per_rooms
-w2<-train_with_extras$rooms_per_capita
-w3<-train_with_extras$rooms_per_household
-w4<-train_with_extras$income_per_capita
 
 
 
@@ -419,28 +313,36 @@ text(x=1:length(cooksd)+1, y=cooksd, labels=ifelse(cooksd>4*mean(cooksd, na.rm=T
 car::outlierTest(fit11_)
 
 ```
-```{r}
 
-rmse(predict(fit11, xs_with_extras), data$validate$median_house_value)*median_house_value_scale
-rmse(predict(fit11_, xs_with_extras), data$validate$median_house_value)*median_house_value_scale
-
-print(nrow(train_with_extras))
-```
+# Entrenamiento de modelos robustos 
 
 ```{r}
-test_with_extras<-addExtraFeats(testing_set)
- xs_test_ex<-extract_xs_with_extras(test_with_extras)
- writePredictions(predict(fit11_, xs_test_ex), "fit11_OL")
-# writePredictions(predict(fit11, xs_test_ex), "fit11")
-```
-
-
-```{r}
-folds <- cvFolds(nrow(train_with_extras), K = 5, R = 10)
-repCV(fit11, cost = rmspe, folds = folds)
-repCV(fit11_, cost = rmspe, folds = folds)
 
 
 
 ```
  
+# Predicciones en test-set
+
+```{r}
+timestamp<-function() {
+  my_options <- options(digits.secs = 3)
+  timestamp<-strftime(Sys.time(), "%m%d_%H%M%OS")
+  options(my_options)  
+  return(timestamp)
+}
+
+writePredictions<-function(predictions, name, ids=testing_set$id) {
+  data<-cbind(id=ids, median_house_value=predictions*median_house_value_scale)
+  filename<-paste("predictions/", timestamp(), "_", name, ".csv", sep="")
+  write.csv(data, filename, row.names = FALSE, quote=FALSE)
+}
+```
+
+```{r}
+testing_set<-loadAndPreprocess("test.csv")
+testing_set<-imp_total_bedrooms(testing_set)
+testing_set<-addExtraFeats(testing_set)
+# writePredictions(predict(fit11, xs_test_ex), "fit11")
+```
+
