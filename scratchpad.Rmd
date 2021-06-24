@@ -15,11 +15,16 @@ summary(read.csv("test.csv"))
 2. scaling/transformation/normalization
 2. DONE k-folds
    ditch 3 way split, use 80/20
+2. 
 2.5 selection techniques
 2.5. Más Feature Engineering
 3. regularización
 3. residual plot
 4. check for heteroskedasticity
+5. trees?!?
+
+# Candidates
+fitTop3, fitAll, bestN(fitCap)
 
 when having spare tries: compare binning age with age
 

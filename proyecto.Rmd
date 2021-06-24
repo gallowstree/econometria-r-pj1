@@ -128,11 +128,11 @@ print(summary(data$validate$total_bedrooms))
 plot_outliers<-function(df, colname) {
   column<-sym(colname)
 
-  hist<-ggplot(df, aes(x=unlist(!!column)))+
+  hist<-ggplot(df, aes(x=!!column))+
     geom_histogram(color="white", fill="blue")+
     theme_minimal()
   
-  box<-ggplot(df, aes(x=unlist(!!column)))+
+  box<-ggplot(df, aes(x=!!column))+
     geom_boxplot()+
     theme_minimal()
   
@@ -147,12 +147,24 @@ plot_outliers<-function(df, colname) {
 ```
 
 
-```{r fig.height=4, fig.width=12.5, eval=FALSE}
-for (col in names(nasRemoved)) {
-  plot_outliers(nasRemoved, col)
+```{r fig.height=4, fig.width=12.5}
+plotAllOutliers<-function(data) {
+  filtered<-data
+  if("id" %in% colnames(data)) {
+    filtered<-data %>% 
+        dplyr::select(-c(ocean_proximity, id)) %>%
+        filter(!is.na(total_bedrooms))
+  }
+  for (col in names(filtered)) {
+     plot_outliers(filtered, col)
+  }
 }
+
 ```
 
+```{r fig.height=4, fig.width=12.5}
+plotAllOutliers(data$train)
+```
 
 # Creación y análisis de nuevos features
 
@@ -210,11 +222,19 @@ model_rmse<-function(model, observations, actual_values, scale=median_house_valu
   predictions<-predict(model, observations)
   return(rmse(predictions, actual_values)*scale)
 }
+
+scores<-function(model, xs=data$validate, y=data$validate$median_house_value, cost = rmspe, ...) {
+  folds <- cvFolds(nrow(xs), K = 5, R = 10)
+  return(data.frame(
+    validation_error=model_rmse(model, xs, y),
+    k_fold_cv_error=repCV(model, cost = cost, folds = folds, ...)$cv[[1]]*median_house_value_scale
+  ))
+}
 ```
 
 ```{r}
-training_vars_1<-data$train %>%
-  dplyr::select(median_house_value, 
+extractTrainingVars<-function(data) {
+  return(data %>% dplyr::select(median_house_value, 
                 median_income,
                 enc_ocean_proximity,
                 total_rooms,
@@ -225,26 +245,16 @@ training_vars_1<-data$train %>%
                 beds_per_rooms,
                 rooms_per_capita,
                 rooms_per_household,
-                income_per_capita)
-
-fit1<-lm(median_house_value ~ ., data = training_vars_1)
-
-```
-
-```{r}
-
-scores<-function(model, xs=data$validate, y=data$validate$median_house_value, cost = rmspe, ...) {
-  folds <- cvFolds(nrow(xs), K = 5, R = 10)
-  return(data.frame(
-    validation_error=model_rmse(model, xs, y),
-    k_fold_cv_error=repCV(model, cost = cost, folds = folds, ...)$cv[[1]]*median_house_value_scale
-  ))
+                income_per_capita))
 }
 
+training_vars_1<-extractTrainingVars(data$train)
 
+fit1<-lm(median_house_value ~ ., data = training_vars_1)
 scores(fit1)
 
 ```
+
 
 # Outliers pt.2
 ## plots
@@ -274,50 +284,95 @@ boxplot(data$train$median_house_value, main="median_house_value", boxwex=0.1)
 print(outlier_values)
 ```
 
-## cook's distance
-```{r fig.height=7, fig.width=9}
+## Cook's distance
+```{r fig.height=5, fig.width=6}
 cooksd<-cooks.distance(fit1)
 plot(cooksd, pch="*", cex=1, main="Influential Obs by Cooks distance")  # plot cook's distance
 abline(h = 4*mean(cooksd, na.rm=T), col="red")  # add cutoff line
 text(x=1:length(cooksd)+1, y=cooksd, labels=ifelse(cooksd>4*mean(cooksd, na.rm=T),names(cooksd),""), col="red")  # add labels
 ```
+## Eliminación de los peores outliers
 
 ```{r}
 distances<-data.frame(d=cooksd[cooksd>4*mean(cooksd, na.rm=T)])
 distances<-distances %>% arrange(desc(d))
 indices<-as.integer(row.names(distances))
-indices
 
-data$train[match(indices, rownames(data$train)),]
-# 7589, 13996, 8834, 6377, 5815, 7589, 8919, 3137
+removeTopNOutliers<-function(n, indices, data) {
+  return( data[-match(indices[1:n], rownames(data)), ])
+}
 
+trainMinusTopOL<-removeTopNOutliers(3, indices, data$train)
+trainMinusAllOL<-removeTopNOutliers(length(indices), indices, data$train)
+fitTop3  <-lm(median_house_value ~ ., data = extractTrainingVars(trainMinusTopOL))
+fitAll<-lm(median_house_value ~ ., data = extractTrainingVars(trainMinusAllOL))
+scores(fitTop3  )
+scores(fitAll)
+
+data$train[match(indices[1:3], rownames(data$train)),]
+summary(fitTop3)
+summary(fitAll)
 ```
-## outliers test
+## Outliers test
 ```{r}
-car::outlierTest(fit1)
+outlierIndices<-as.numeric(names(car::outlierTest(fit1)[[1]]))
+trainMinusAllOL2<-removeTopNOutliers(length(outlierIndices), outlierIndices, data$train)
+fitAll2<-lm(median_house_value ~ ., data = extractTrainingVars(trainMinusAllOL2))
+scores(fitAll2)
+```
+## Capping
+```{r}
+cap<-function(x, IQR_factor=1.5, qntLo=.25, qntHi=.75, capLo=.05, capHi=.95) {
+  qnt <- quantile(x, probs=c(qntLo, qntHi), na.rm=T)
+  caps <- quantile(x, probs=c(capLo, capHi), na.rm=T)
+  delta<-IQR_factor * IQR(x, na.rm=T)
+  thresholds<-c(qnt[1] - delta, qnt[2] + delta)
+  x[x < thresholds[1]] <- caps[1]
+  x[x > thresholds[2]] <- caps[2]
+  print(paste("caps:", caps[1], caps[2]))
+  print(paste("thresholds:", thresholds[1], thresholds[2]))
+
+  return(x)
+}
+
+compare_capped_performance<-function(train_data, colName, candidates, extract=extractTrainingVars) {
+  # implement scaling/norm/transform and add it here
+  for (candidate in names(candidates)) {
+    print(candidate)
+    col<-candidates[[candidate]]
+    train_data[[colName]]<-col
+    
+    fit<-lm(median_house_value ~ ., data = extract(train_data))
+    print(paste(scores(fit)))
+  }
+}
 ```
 
-# Entrenamiento de modelos sin outliers
+```{r fig.height=4, fig.width=12.5}
+data_train<-trainMinusTopOL
+
+candidates<-data.frame(
+  original=data_train$total_rooms,
+  cap_default=cap(data_train$total_rooms)
+  #,cap_2=cap(data_train$total_rooms, IQR_factor = 1.75)
+  ,cap_3=cap(data_train$total_rooms, IQR_factor = 2)
+  #,cap_4=cap(data_train$total_rooms, IQR_factor = 4)
+  #,cap_5=cap(data_train$total_rooms, IQR_factor = 10)
+  ,cap_6=cap(data_train$total_rooms, IQR_factor = 15)
+  ,cap_7=cap(data_train$total_rooms, IQR_factor = 21)
+
+)
+
+plotAllOutliers(candidates)
+compare_capped_performance(data_train, "total_rooms", candidates)
+
+```
+
+# Transformaciones y escalado
 ```{r}
 
 ```
 
-```{r fig.height=10, fig.width=10, eval=FALSE}
-train_with_extras<-train_with_extras[-match(indices[1:20], rownames(train_with_extras)),]
-
-
-
-
-fit11_ <- lm(y ~ x1 + x2 + x3 + x4 + x5 + x6 + x7 + w1 + w2 + w3 +w4, data=train_with_extras)
-
-cooksd<-cooks.distance(fit11_)
-plot(cooksd, pch="*", cex=1, main="Influential Obs by Cooks distance")  # plot cook's distance
-abline(h = 4*mean(cooksd, na.rm=T), col="red")  # add cutoff line
-text(x=1:length(cooksd)+1, y=cooksd, labels=ifelse(cooksd>4*mean(cooksd, na.rm=T),names(cooksd),""), col="red")  # add labels
-
-car::outlierTest(fit11_)
-
-```
 
 # Entrenamiento de modelos robustos (tolerantes a outliers)
 ## MM-type regression
