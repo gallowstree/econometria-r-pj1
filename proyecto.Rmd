@@ -337,6 +337,16 @@ print("fitted")
 scores(fitLts, cost=rtmspe, trim=0.1)
 ```
 
+```{r}
+irls<-rlm(median_house_value ~ ., data = training_vars_1)
+irls_bi<-rlm(median_house_value ~ ., data = training_vars_1, psi = psi.bisquare)
+summary(irls)
+summary(irls_bi)
+```
+```{r}
+scores(irls)
+scores(irls_bi)
+```
  
 # Predicciones en test-set
 
@@ -353,6 +363,10 @@ writePredictions<-function(predictions, name, ids=testing_set$id) {
   filename<-paste("predictions/", timestamp(), "_", name, ".csv", sep="")
   write.csv(data, filename, row.names = FALSE, quote=FALSE)
 }
+
+writePredictions1<-function(model, name, test_set=testing_set) {
+  writePredictions(predict(model, test_set), name)
+}
 ```
 
 ```{r}
@@ -360,5 +374,12 @@ testing_set<-loadAndPreprocess("test.csv")
 testing_set<-imp_total_bedrooms(testing_set)
 testing_set<-addExtraFeats(testing_set)
 # writePredictions(predict(fit11, xs_test_ex), "fit11")
+```
+
+```{r}
+#writePredictions1(fitLmrob, "fitLmrob")
+#writePredictions1(fitLts, "fitLts")
+#writePredictions1(irls, "irls")
+#writePredictions1(irls_bi, "irls_bi")
 ```
 

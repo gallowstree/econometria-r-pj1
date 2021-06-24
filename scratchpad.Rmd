@@ -11,8 +11,8 @@ summary(read.csv("test.csv"))
 # Prioridades
 1.DONE Generar predicciones rápidamente para tener un baseline con qué comparar el modelo
 1.DONE Incluir age
-2. Tratar outliers -> get some quick features
-2. scaling
+1. Tratar outliers -> get some quick features
+2. scaling/transformation/normalization
 2. DONE k-folds
    ditch 3 way split, use 80/20
 2.5 selection techniques
