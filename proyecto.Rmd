@@ -335,43 +335,125 @@ cap<-function(x, IQR_factor=1.5, qntLo=.25, qntHi=.75, capLo=.05, capHi=.95) {
   return(x)
 }
 
-compare_capped_performance<-function(train_data, colName, candidates, extract=extractTrainingVars) {
+extractAndRecalculateTrainingVars<-function(data) {
+  beds_per_rooms<-data$total_bedrooms / data$total_rooms
+  rooms_per_household<-data$total_rooms / data$households
+  income_per_capita<-data$median_income/data$population
+  income_per_household<-data$median_income/data$households
+  beds_per_capita<-data$total_bedrooms / data$population
+  rooms_per_capita<-data$total_rooms / data$population
+  pop_per_household<-data$population/data$households  
+  
+  return(data.frame(median_house_value=data$median_house_value,
+                median_income=data$median_income,
+                enc_ocean_proximity=data$enc_ocean_proximity,
+                total_rooms=data$total_rooms,
+                latitude=data$latitude,
+                longitude=data$longitude,
+                total_bedrooms=data$total_bedrooms,
+                housing_median_age=data$housing_median_age,
+                beds_per_rooms=beds_per_rooms,
+                rooms_per_capita=rooms_per_capita,
+                rooms_per_household=rooms_per_household,
+                income_per_capita=income_per_capita))
+}
+
+compare_capped_performance<-function(train_data, colName, candidates, extract=extractAndRecalculateTrainingVars) {
   # implement scaling/norm/transform and add it here
+  # allow more than one var at the same time
   for (candidate in names(candidates)) {
     print(candidate)
-    col<-candidates[[candidate]]
-    train_data[[colName]]<-col
     
+    train_data[[colName]]<-candidates[[candidate]]
+
     fit<-lm(median_house_value ~ ., data = extract(train_data))
     print(paste(scores(fit)))
   }
 }
+
+data_train<-trainMinusTopOL
 ```
 
 ```{r fig.height=4, fig.width=12.5}
-data_train<-trainMinusTopOL
-
 candidates<-data.frame(
   original=data_train$total_rooms,
   cap_default=cap(data_train$total_rooms)
-  #,cap_2=cap(data_train$total_rooms, IQR_factor = 1.75)
-  ,cap_3=cap(data_train$total_rooms, IQR_factor = 2)
-  #,cap_4=cap(data_train$total_rooms, IQR_factor = 4)
-  #,cap_5=cap(data_train$total_rooms, IQR_factor = 10)
-  ,cap_6=cap(data_train$total_rooms, IQR_factor = 15)
-  ,cap_7=cap(data_train$total_rooms, IQR_factor = 21)
+  ,cap_5=cap(data_train$total_rooms, IQR_factor = 19)
+
 
 )
 
 plotAllOutliers(candidates)
 compare_capped_performance(data_train, "total_rooms", candidates)
+```
+
+```{r fig.height=4, fig.width=12.5}
+candidates<-data.frame(
+  original=data_train$total_bedrooms,
+  cap_default=cap(data_train$total_bedrooms)
+    ,cap_2=cap(data_train$total_bedrooms, IQR_factor = 1.5)
+  ,cap_3=cap(data_train$total_bedrooms, IQR_factor = 2)
+  ,cap_5=cap(data_train$total_bedrooms, IQR_factor = 7)
+  ,cap_5=cap(data_train$total_bedrooms, IQR_factor = 16)
+
+
+)
+
+plotAllOutliers(candidates)
+compare_capped_performance(data_train, "total_bedrooms", candidates)
+```
+
+```{r fig.height=4, fig.width=12.5}
+candidates<-data.frame(
+  original=data_train$population,
+  cap_default=cap(data_train$population)
+  ,cap_6=cap(data_train$population, IQR_factor = 18)
+
+
+)
+
+plotAllOutliers(candidates)
+compare_capped_performance(data_train, "population", candidates)
 
 ```
+
+```{r fig.height=4, fig.width=12.5}
+candidates<-data.frame(
+  original=data_train$households,
+  cap_default=cap(data_train$households)
+  ,cap_2=cap(data_train$households, IQR_factor = 1.5)
+  ,cap_6=cap(data_train$households, IQR_factor = 17.5)
+
+)
+
+plotAllOutliers(candidates)
+compare_capped_performance(data_train, "households", candidates)
+
+
+```
+```{r}
+candidates<-data.frame(
+  original=data_train$median_income,
+  cap_default=cap(data_train$median_income)
+  ,cap_2=cap(data_train$median_income, IQR_factor = 1.5)
+  ,cap_3=cap(data_train$median_income, IQR_factor = 2) ##DING!
+)
+
+#plotAllOutliers(candidates)
+compare_capped_performance(data_train, "median_income", candidates, extract = extractTrainingVars)
+compare_capped_performance(data_train, "median_income", candidates)
+
+
+prueba<-data_train
+prueba[["median_income"]]<-candidates$cap_3
+
+fit_cap<-lm(median_house_value ~ ., data = extractAndRecalculateTrainingVars(prueba))
+scores(fit_cap)
+```
+
 
 # Transformaciones y escalado
-```{r}
 
-```
 
 
 # Entrenamiento de modelos robustos (tolerantes a outliers)
@@ -435,6 +517,6 @@ testing_set<-addExtraFeats(testing_set)
 #writePredictions1(fitLmrob, "fitLmrob")
 #writePredictions1(fitLts, "fitLts")
 #writePredictions1(irls, "irls")
-#writePredictions1(irls_bi, "irls_bi")
+writePredictions1(fit_cap, "fit_cap")
 ```
 
