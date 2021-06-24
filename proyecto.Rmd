@@ -233,13 +233,14 @@ fit1<-lm(median_house_value ~ ., data = training_vars_1)
 
 ```{r}
 
-scores<-function(model, xs=data$validate, y=data$validate$median_house_value) {
+scores<-function(model, xs=data$validate, y=data$validate$median_house_value, cost = rmspe, ...) {
   folds <- cvFolds(nrow(xs), K = 5, R = 10)
   return(data.frame(
     validation_error=model_rmse(model, xs, y),
-    k_fold_cv_error=repCV(model, cost = rmspe, folds = folds)$cv[[1]]*median_house_value_scale
+    k_fold_cv_error=repCV(model, cost = cost, folds = folds, ...)$cv[[1]]*median_house_value_scale
   ))
 }
+
 
 scores(fit1)
 
@@ -297,6 +298,10 @@ car::outlierTest(fit1)
 ```
 
 # Entrenamiento de modelos sin outliers
+```{r}
+
+```
+
 ```{r fig.height=10, fig.width=10, eval=FALSE}
 train_with_extras<-train_with_extras[-match(indices[1:20], rownames(train_with_extras)),]
 
@@ -314,13 +319,24 @@ car::outlierTest(fit11_)
 
 ```
 
-# Entrenamiento de modelos robustos 
-
+# Entrenamiento de modelos robustos (tolerantes a outliers)
+## MM-type regression
 ```{r}
 
-
+fitLmrob<-lmrob(median_house_value ~ ., data = training_vars_1)
+print("fitted")
+scores(fitLmrob, cost=rtmspe, trim=0.1)
 
 ```
+
+
+## LTS robust regression
+```{r}
+fitLts<-ltsReg(median_house_value ~ ., data = training_vars_1)
+print("fitted")
+scores(fitLts, cost=rtmspe, trim=0.1)
+```
+
  
 # Predicciones en test-set
 

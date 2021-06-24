@@ -13,7 +13,7 @@ summary(read.csv("test.csv"))
 1.DONE Incluir age
 2. Tratar outliers -> get some quick features
 2. scaling
-2. k-folds
+2. DONE k-folds
    ditch 3 way split, use 80/20
 2.5 selection techniques
 2.5. Más Feature Engineering
