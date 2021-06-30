@@ -19,6 +19,7 @@ library(rgdal)
 library(geosphere)
 library(dismo)
 library(rgeos)
+library(RANN)
 ```
 
 # Pre-procesamiento, limpieza y análisis inicial
@@ -629,27 +630,22 @@ testing_set<-predict(preProcess1, testing_set)
 #writePredictions1(irls, "irls")
 writePredictions1(full_threeway_model, "full_threeway_model")
 ```
-```{r}
 
-```
 
 ```{r}
-# example data from the thread
-y <- data_train$latitude
 x <- data_train$longitude
+y <- data_train$latitude
 
-# convert data to a SpatialPointsDataFrame object
 xy <- SpatialPointsDataFrame(
-      matrix(c(x,y), ncol=2), data.frame(ID=seq(1:length(x))),
+      matrix(c(x,y), ncol=2), data.frame(ID=data_train$id),
       proj4string=CRS("+proj=longlat +ellps=WGS84 +datum=WGS84"))
 
-# use the distm function to generate a geodesic distance matrix in meters
 mdist <- distm(xy)
 
 
 ```
+
 ```{r}
-# cluster all points using a hierarchical clustering approach
 hc <- hclust(as.dist(mdist), method="complete")
 
 # define the distance threshold, in this case 40 m
@@ -657,8 +653,6 @@ d=40000
 
 # define clusters based on a tree "height" cutoff "d" and add them to the SpDataFrame
 xy$clust <- cutree(hc, h=d)
-
-summary(xy$clust)
 ```
 
 
@@ -684,6 +678,11 @@ plot(xy, col=rainbow(max(xy$clust))[factor(xy$clust)], add=T)
 ```
 
 ```{r}
-
+data_train[data_train$id %in% c(5009, 2438),]
+tail(xy)
+```
+```{r}
+point<-data.frame(x=c(-118.33, -119.61	), y=c(34.01, 36.58))
+nn2(as.data.frame(cent), query=point,k=1)
 ```
 
