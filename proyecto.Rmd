@@ -14,13 +14,17 @@ library(caret)
 library(MASS)
 library(robustbase)
 library(cvTools)
-
+library(sp)
+library(rgdal)
+library(geosphere)
+library(dismo)
+library(rgeos)
 ```
 
 # Pre-procesamiento, limpieza y análisis inicial
 ```{r}
 
-median_house_value_scale = 10000
+median_house_value_scale = 100000
 
 initialPreprocessing<-function(df) {
   df$ocean_proximity<-as.factor(df$ocean_proximity)
@@ -245,6 +249,7 @@ extractTrainingVars<-function(data) {
                 beds_per_rooms,
                 rooms_per_capita,
                 rooms_per_household,
+                population,
                 income_per_capita))
 }
 
@@ -431,6 +436,7 @@ compare_capped_performance(data_train, "households", candidates)
 
 
 ```
+
 ```{r}
 candidates<-data.frame(
   original=data_train$median_income,
@@ -453,36 +459,138 @@ scores(fit_cap)
 
 
 # Transformaciones y escalado
+```{r}
+preProcess1<-preProcess(data_train)
+train1<-predict(preProcess1, data_train)
+validate1<-predict(preProcess1, data$validate)
+
+fitpp1<-lm(median_house_value ~ ., data = extractTrainingVars(train1))
+scores(fitpp1, xs=validate1, y=validate1$median_house_value)
+
+```
+```{r}
+preProcess1<-preProcess(data_train, method = c("scale", "BoxCox"))
+train1<-predict(preProcess1, data_train)
+validate1<-predict(preProcess1, data$validate)
+
+fitpp1<-lm(median_house_value ~ ., data = extractTrainingVars(train1))
+scores(fitpp1, xs=validate1, y=validate1$median_house_value)
+
+```
+```{r}
+
+
+preProcess1<-preProcess(subset(data_train, select=-c(median_house_value, latitude, longitude, id)))
+train1<-predict(preProcess1, data_train)
+validate1<-predict(preProcess1, data$validate)
+
+
+fitpp2<-lm(median_house_value ~ median_income+poly(median_income, 2) +
+                                latitude * longitude +
+                                enc_ocean_proximity +
+                                population+poly(population, 2)+
+                                total_rooms*total_bedrooms+
+                                total_bedrooms+poly(total_bedrooms, 3)+
+                                housing_median_age+poly(housing_median_age, 3)+
+                                beds_per_rooms+poly(beds_per_rooms, 3)+
+                                rooms_per_capita+
+                                rooms_per_household+poly(rooms_per_household, 3)+
+                                income_per_capita
+                                , data = extractTrainingVars(train1))
+
+summary(fitpp2)
+scores(fitpp2, xs=validate1, y=validate1$median_house_value)
+
+```
+66204.42	64151.6
+66085.98	64009.12	
+65934.67	64135.29		
+65891.08	64631.93	
+65805.51	64390.26		
+65794.3	64320.67	
+65786.1	64297.81
+
+```{r}
+full_threeway_model = lm(median_house_value ~ (.)^3, data = extractTrainingVars(train1))
+summary(full_threeway_model)
+scores(full_threeway_model, xs=validate1, y=validate1$median_house_value)
+
+```
 
 
 
 # Entrenamiento de modelos robustos (tolerantes a outliers)
 ## MM-type regression
-```{r}
+```{r eval=FALSE}
 
-fitLmrob<-lmrob(median_house_value ~ ., data = training_vars_1)
-print("fitted")
-scores(fitLmrob, cost=rtmspe, trim=0.1)
+fitLmrob<-lmrob(median_house_value ~ median_income+poly(median_income, 2) +
+                                latitude * longitude +
+                                enc_ocean_proximity +
+                                population+poly(population, 2)+
+                                total_rooms*total_bedrooms+
+                                total_bedrooms+poly(total_bedrooms, 3)+
+                                housing_median_age+poly(housing_median_age, 3)+
+                                beds_per_rooms+poly(beds_per_rooms, 3)+
+                                rooms_per_capita+
+                                rooms_per_household+poly(rooms_per_household, 3)+
+                                income_per_capita
+                                , data = extractTrainingVars(train1))
+
+summary(fitLmrob)
+scores(fitLmrob, xs=validate1, y=validate1$median_house_value, cost=rtmspe, trim=0.1)
 
 ```
 
 
 ## LTS robust regression
-```{r}
-fitLts<-ltsReg(median_house_value ~ ., data = training_vars_1)
+```{r eval=FALSE}
+fitLts<-ltsReg(median_house_value ~ median_income+poly(median_income, 2) +
+                                latitude * longitude +
+                                enc_ocean_proximity +
+                                population+poly(population, 2)+
+                                total_rooms*total_bedrooms+
+                                total_bedrooms+poly(total_bedrooms, 3)+
+                                housing_median_age+poly(housing_median_age, 3)+
+                                beds_per_rooms+poly(beds_per_rooms, 3)+
+                                rooms_per_capita+
+                                rooms_per_household+poly(rooms_per_household, 3)+
+                                income_per_capita
+                                , data = extractTrainingVars(train1))
 print("fitted")
 scores(fitLts, cost=rtmspe, trim=0.1)
 ```
 
 ```{r}
-irls<-rlm(median_house_value ~ ., data = training_vars_1)
-irls_bi<-rlm(median_house_value ~ ., data = training_vars_1, psi = psi.bisquare)
+irls<-rlm(median_house_value ~ median_income+poly(median_income, 2) +
+                                latitude * longitude +
+                                enc_ocean_proximity +
+                                population+poly(population, 2)+
+                                total_rooms*total_bedrooms+
+                                total_bedrooms+poly(total_bedrooms, 3)+
+                                housing_median_age+poly(housing_median_age, 3)+
+                                beds_per_rooms+poly(beds_per_rooms, 3)+
+                                rooms_per_capita+
+                                rooms_per_household+poly(rooms_per_household, 3)+
+                                income_per_capita
+                                , data = extractTrainingVars(train1))
+irls_bi<-rlm(median_house_value ~median_income+poly(median_income, 2) +
+                                latitude * longitude +
+                                enc_ocean_proximity +
+                                population+poly(population, 2)+
+                                total_rooms*total_bedrooms+
+                                total_bedrooms+poly(total_bedrooms, 3)+
+                                housing_median_age+poly(housing_median_age, 3)+
+                                beds_per_rooms+poly(beds_per_rooms, 3)+
+                                rooms_per_capita+
+                                rooms_per_household+poly(rooms_per_household, 3)+
+                                income_per_capita
+                                , data = extractTrainingVars(train1), psi = psi.bisquare)
 summary(irls)
 summary(irls_bi)
 ```
 ```{r}
-scores(irls)
-scores(irls_bi)
+scores(irls, xs=validate1, y=validate1$median_house_value)
+scores(irls_bi,  xs=validate1, y=validate1$median_house_value)
 ```
  
 # Predicciones en test-set
@@ -510,6 +618,8 @@ writePredictions1<-function(model, name, test_set=testing_set) {
 testing_set<-loadAndPreprocess("test.csv")
 testing_set<-imp_total_bedrooms(testing_set)
 testing_set<-addExtraFeats(testing_set)
+testing_set<-predict(preProcess1, testing_set)
+
 # writePredictions(predict(fit11, xs_test_ex), "fit11")
 ```
 
@@ -517,6 +627,63 @@ testing_set<-addExtraFeats(testing_set)
 #writePredictions1(fitLmrob, "fitLmrob")
 #writePredictions1(fitLts, "fitLts")
 #writePredictions1(irls, "irls")
-writePredictions1(fit_cap, "fit_cap")
+writePredictions1(full_threeway_model, "full_threeway_model")
+```
+```{r}
+
+```
+
+```{r}
+# example data from the thread
+y <- data_train$latitude
+x <- data_train$longitude
+
+# convert data to a SpatialPointsDataFrame object
+xy <- SpatialPointsDataFrame(
+      matrix(c(x,y), ncol=2), data.frame(ID=seq(1:length(x))),
+      proj4string=CRS("+proj=longlat +ellps=WGS84 +datum=WGS84"))
+
+# use the distm function to generate a geodesic distance matrix in meters
+mdist <- distm(xy)
+
+
+```
+```{r}
+# cluster all points using a hierarchical clustering approach
+hc <- hclust(as.dist(mdist), method="complete")
+
+# define the distance threshold, in this case 40 m
+d=40000
+
+# define clusters based on a tree "height" cutoff "d" and add them to the SpDataFrame
+xy$clust <- cutree(hc, h=d)
+
+summary(xy$clust)
+```
+
+
+```{r fig.width=10, fig.height=10}
+
+
+# expand the extent of plotting frame
+xy@bbox[] <- as.matrix(extend(extent(xy),0.001))
+
+# get the centroid coords for each cluster
+cent <- matrix(ncol=2, nrow=max(xy$clust))
+for (i in 1:max(xy$clust))
+    # gCentroid from the rgeos package
+    cent[i,] <- gCentroid(subset(xy, clust == i))@coords
+
+# compute circles around the centroid coords using a 40m radius
+# from the dismo package
+ci <- circles(cent, d=d, lonlat=T)
+
+# plot
+plot(ci@polygons, axes=T)
+plot(xy, col=rainbow(max(xy$clust))[factor(xy$clust)], add=T)
+```
+
+```{r}
+
 ```
 
